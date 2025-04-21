@@ -1,0 +1,85 @@
+<script lang="ts">
+  import { createEventDispatcher } from 'svelte';
+export let showModal: boolean = false;
+  let itemName = "";
+  let itemQuantity = 0;
+  let itemUnit = "";
+  let itemCategory = "";
+  const dispatch = createEventDispatcher();
+
+  function closeModal() {
+    dispatch('close');
+    itemName = "";
+    itemQuantity = 0;
+    itemUnit = "";
+  }
+
+  function submitItem() {
+    // เพิ่มตรรกะการ submit item ไปยังฐานข้อมูลที่นี่
+    dispatch('save', { name: itemName, quantity: itemQuantity, unit: itemUnit });
+    closeModal();
+  }
+</script>
+
+{#if showModal}
+  <div class="modal modal-open">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg">Add New Inventory Item</h3>
+      <form on:submit|preventDefault={submitItem}>
+        <div class="form-control">
+          <!-- svelte-ignore a11y_label_has_associated_control -->
+          <div class="mt-5 mb-4">
+            <label for="itemName" class="block text-gray-700 text-sm font-bold mb-2">
+              ชื่อ :
+            </label>
+            <input
+              type="text"
+              id="itemName"
+              class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              bind:value={itemName}
+              placeholder="ชื่อ"
+              required
+            />
+          </div>
+
+          <div class="mb-4">
+            <label for="itemQuantity" class="block text-gray-700 text-sm font-bold mb-2">
+              จำนวน :
+            </label>
+            <input
+              type="text"
+              id="itemQuantity"
+              class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              bind:value={itemQuantity}
+              placeholder="เท่าไหร่?"
+              required
+            />
+          </div>
+
+          <div class="mb-4">
+            <label for="itemUnit" class="block text-gray-700 text-sm font-bold mb-2">
+              หน่วย :
+            </label>
+            <input
+              type="text"
+              id="itemUnit"
+              class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              bind:value={itemUnit}
+              placeholder="หน่วยอะไร?"
+              required
+            />
+          </div>
+
+        </div>
+        <div class="modal-action">
+          <button type="button" class="btn" on:click={closeModal}>Close</button>
+          <button type="submit" class="btn btn-success">Submit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+{/if}
+
+<style>
+  /* สามารถปรับแต่งสไตล์เพิ่มเติมได้ตามต้องการ */
+</style>
