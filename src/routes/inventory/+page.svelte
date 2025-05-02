@@ -5,6 +5,7 @@
     let showAddItemModal = false;
     const openModal = () => { showAddItemModal = true; };
   
+    import { dataDir } from '@tauri-apps/api/path'
 
     interface Item {
       id: number;
@@ -44,7 +45,7 @@
         items = items.filter(item => item.id !== id);
       } catch (err) {
         console.log(err);
-        error = "Failed to delete item - check console";
+        error = "มีสูตรอาหารที่ใช้วัตถุดิบนี้อยู่ กรุณาลบสูตรอาหารก่อนที่จะลบวัตถุดิบนี้";
       }
     }
   
@@ -74,12 +75,16 @@ async function handleSaveNewItem(event: CustomEvent<{ name: string; quantity: nu
     let searchQuery = "";
     let selectedCategory = "All";
     
-    // Available categories (Consider fetching these from the DB or defining them based on expected data)
-    const categories = ["All", "Dairy", "Bakery", "Fruit", "Vegetables", "Meat", "Grains", "Other"]; // Added 'Other' as a fallback
+    // Available categories
+    const categories = ["All", "Dairy", "Bakery", "Fruit", "Vegetables", "Meat", "Grains", "Other"]; 
+  
+    // Pagination state
+    let currentPage = 1;
+    const itemsPerPage = 10;
   
     // Filtered items based on search query and filters
     $: filteredItems = items.filter(item => {
-      const matchesSearch = searchQuery === "" || 
+      const matchesSearch = searchQuery === "" ||
         item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.category.toLowerCase().includes(searchQuery.toLowerCase());
       
@@ -87,9 +92,23 @@ async function handleSaveNewItem(event: CustomEvent<{ name: string; quantity: nu
       
       return matchesSearch && matchesCategory;
     });
-  </script>
   
-  <!-- Remove the main tag since it's in the layout -->
+    // Calculate total pages
+    $: totalPages = Math.ceil(filteredItems.length / itemsPerPage);
+  
+    // Get items for the current page
+    $: paginatedItems = filteredItems.slice(
+      (currentPage - 1) * itemsPerPage,
+      currentPage * itemsPerPage
+    );
+  
+    function changePage(page: number) {
+      if (page >= 1 && page <= totalPages) {
+        currentPage = page;
+      }
+    }
+  </script>
+
   <div class="fade-in container mx-auto px-4 py-8 w-full min-h-screen p-0">
     <div class="max-w-7xl ms-auto mt-10">
       <div class="flex justify-between items-center mb-8">
@@ -120,7 +139,6 @@ async function handleSaveNewItem(event: CustomEvent<{ name: string; quantity: nu
             </select>
           </div>
           
-          <!-- Removed Status Filter -->
         </div>
       </div>
       
@@ -148,16 +166,16 @@ async function handleSaveNewItem(event: CustomEvent<{ name: string; quantity: nu
                     <td colspan="5" class="text-center py-4">No items match your search or no items in inventory.</td>
                   </tr>
                 {:else}
-                  {#each filteredItems as item (item.id)} <!-- Corrected key syntax -->
-                    <tr class="hover"> <!-- Added hover effect -->
+                  {#each paginatedItems as item (item.id)}
+                    <tr class="hover">
                       <td>{item.name}</td>
                       <td>{item.category || 'N/A'}</td> <!-- Handle potential null/empty category -->
                       <td>{item.quantity}</td>
                       <td>{item.unit}</td>
                       <td>
                         <div class="flex gap-2">
-                          <button class="btn btn-xs btn-secondary">Edit</button> <!-- Changed to btn-xs -->
-                          <button class="btn btn-xs btn-error" on:click={() => deleteItem(item.id)}>Delete</button> <!-- Changed to btn-xs and removed btn-primary -->
+                          <button class="btn btn-xs btn-secondary">Edit</button> 
+                          <button class="btn btn-xs btn-error" on:click={() => deleteItem(item.id)}>Delete</button>
                         </div>
                       </td>
                     </tr>
@@ -179,20 +197,34 @@ async function handleSaveNewItem(event: CustomEvent<{ name: string; quantity: nu
       <!-- Summary & Pagination -->
       <div class="flex flex-col md:flex-row justify-between items-center mt-4">
         <div class="text-sm mb-4 md:mb-0">
-          Showing {filteredItems.length} of {items.length} items
+          Showing {paginatedItems.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}
+          to {Math.min(currentPage * itemsPerPage, filteredItems.length)}
+          of {filteredItems.length} items (Total: {items.length})
         </div>
         
-        <div class="join">
-          <input
-            class="join-item btn btn-square"
-            type="radio"
-            name="options"
-            aria-label="1"
-            checked />
-          <input class="join-item btn btn-square" type="radio" name="options" aria-label="2" />
-          <input class="join-item btn btn-square" type="radio" name="options" aria-label="3" />
-          <input class="join-item btn btn-square" type="radio" name="options" aria-label="4" />
-        </div>
+        {#if totalPages > 1}
+          <div class="join">
+            <button 
+              class="join-item btn btn-sm" 
+              on:click={() => changePage(currentPage - 1)} 
+              disabled={currentPage === 1}>
+              «
+            </button>
+            {#each Array(totalPages) as _, i}
+              <button 
+                class="join-item btn btn-sm {currentPage === i + 1 ? 'btn-active' : ''}" 
+                on:click={() => changePage(i + 1)}>
+                {i + 1}
+              </button>
+            {/each}
+            <button 
+              class="join-item btn btn-sm" 
+              on:click={() => changePage(currentPage + 1)} 
+              disabled={currentPage === totalPages}>
+              »
+            </button>
+          </div>
+        {/if}
       </div>
     </div>
 <Additemmodal showModal={showAddItemModal as any} on:close={() => showAddItemModal = false} on:save={handleSaveNewItem} />

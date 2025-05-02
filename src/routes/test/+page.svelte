@@ -1,7 +1,17 @@
 <script>
+
+import { open } from '@tauri-apps/plugin-dialog';
   let isOpen = false;
   let itemName = '';
+  // @ts-ignore
   let itemQuantity = 0; 
+
+  // @ts-ignore
+  const file = await open({
+  multiple: false,
+  directory: false,
+});
+console.log(file);
   function openModal() {
     isOpen = true;
   }

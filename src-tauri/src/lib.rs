@@ -1,17 +1,16 @@
 use tauri_plugin_sql::{Migration, MigrationKind};
 
-#[tauri::command]  
-fn greet(name: &str) -> String {  
-    format!("Hello, {}! You've been greeted from Rust!", name)  
+#[tauri::command]
+fn greet(name: &str) -> String {
+    format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]  
-pub fn run() {  
-    let migrations = vec![
-  Migration {
-    version: 1,
-    description: "Create tables for inventory app",
-    sql: r#"
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    let migrations = vec![Migration {
+        version: 1,
+        description: "Create tables for inventory app",
+        sql: r#"
 CREATE TABLE IF NOT EXISTS items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name VARCHAR,
@@ -80,18 +79,19 @@ CREATE TABLE IF NOT EXISTS financial_records (
   FOREIGN KEY(recipe_id) REFERENCES recipes(id)
 );
 "#,
-    kind: MigrationKind::Up,
-  },
-];
+        kind: MigrationKind::Up,
+    }];
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:inventory.db", migrations)
-                .build()
+                .build(),
         )
-        .plugin(tauri_plugin_shell::init())  
-        .invoke_handler(tauri::generate_handler![greet])  
-        .run(tauri::generate_context!())  
-        .expect("error while running Tauri application");  
+        .plugin(tauri_plugin_shell::init())
+        .invoke_handler(tauri::generate_handler![greet])
+        .run(tauri::generate_context!())
+        .expect("error while running Tauri application");
 }

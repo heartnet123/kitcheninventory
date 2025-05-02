@@ -29,6 +29,24 @@
   function closeModal() {
     showAddRecipeModal = false;
   }
+
+  async function deleteRecipe(id: number) {
+    if (!db) {
+      error = "Database not initialized.";
+      return;
+    }
+    try {
+      console.log(`Attempting to delete recipe with id: ${id}`);
+      await db.execute("DELETE FROM recipes WHERE id = $1", [id]);
+      console.log(`Recipe with id: ${id} deleted successfully.`);
+      // Remove the recipe from the local array to update the UI
+      recipes = recipes.filter(recipe => recipe.id !== id);
+    } catch (e) {
+      console.error(`Error deleting recipe with id: ${id}:`, e);
+      error = `Failed to delete recipe: ${e}`;
+    }
+  }
+
   async function getRecipes() {
     try {
       console.log("Attempting to load database...");
@@ -38,7 +56,7 @@
       console.log("Executing query to fetch recipes...");
       // Adjust the query based on your actual table structure
       // Assuming columns: id, name, ingredients_count, selling_price, cost, profit, profit_margin, image_url
-      const result = await db.select<Recipe[]>("SELECT id, name, selling_price FROM recipes");
+      const result = await db.select<Recipe[]>("SELECT id, name, selling_price, image FROM recipes");
       console.log("Query successful, fetched recipes:", result);
       recipes = result;
     } catch (e) {
@@ -57,6 +75,8 @@
 <svelte:head>
   <title>Recipe Management</title>
 </svelte:head>
+
+
 
 <div class="fade-in container mx-auto px-4 py-8 w-full min-h-screen p-0" data-theme="retro">
   <div class="max-w-7xl ms-auto mt-10">
@@ -126,7 +146,7 @@
                 <button class="text-blue-500 hover:text-blue-700">
                   <i class="fas fa-edit"></i>
                 </button>
-                <button class="text-red-500 hover:text-red-700">
+                <button class="text-red-500 hover:text-red-700" on:click={() => deleteRecipe(recipe.id)}>
                   <i class="fas fa-trash"></i>
                 </button>
                 <!-- Removed duplicated "View Details" text and button container -->

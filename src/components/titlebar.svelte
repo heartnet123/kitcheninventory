@@ -20,14 +20,18 @@
 <style>
   .titlebar {
     height: 41px;
-    background: oklch(44% 0.011 73.639);
+    background: oklch(52% 0.223 3.958);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
     display: flex;
     align-items: center;
     justify-content: space-between;
     -webkit-app-region: drag;
     padding: 0 5px;
     position: fixed;
-    top: 0;
+    top: -2px;
     left: 0;
     right: 0;
     z-index: 1000;
@@ -35,7 +39,8 @@
   .title {
     margin-left: 30px;
     font-size: 1rem;
-    color: rgb(255, 255, 255);
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   }
   .buttons {
     display: flex;
@@ -49,16 +54,29 @@
     -webkit-app-region: no-drag;
     cursor: pointer;
     margin-left: 5px;
-    background: none;
-    border: none;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
     padding: 0;
+    transition: all 0.2s ease;
   }
   .titlebar-button:hover {
-    background: #5bbec3;
+    background: rgba(91, 190, 195, 0.25);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
   }
   .titlebar-button img {
     width: 16px;
     height: 16px;
+    opacity: 0.8;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1));
+  }
+  
+  .titlebar-button:hover img {
+    opacity: 1;
   }
 
 </style>

@@ -35,7 +35,7 @@
   },
   "plugins": {
     "sql": {
-      "preload": ["sqlite:mydatabase.db"]
+      "preload": ["sqlite:inventory.db"]
     }
   }
 }

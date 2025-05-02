@@ -25,3 +25,5 @@ serde_json = "1"
 base64 = "0.22" # เพิ่ม dependency สำหรับจัดการ base64
 tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2" # เพิ่ม fs plugin dependency

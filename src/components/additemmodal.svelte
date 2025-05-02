@@ -2,7 +2,7 @@
   import { createEventDispatcher } from 'svelte';
 export let showModal: boolean = false;
   let itemName = "";
-  let itemQuantity = 0;
+  let itemQuantity = "";
   let itemUnit = "";
   let itemCategory = "";
   const dispatch = createEventDispatcher();
@@ -10,12 +10,11 @@ export let showModal: boolean = false;
   function closeModal() {
     dispatch('close');
     itemName = "";
-    itemQuantity = 0;
+    itemQuantity = ""; // Reset item quantity
     itemUnit = "";
   }
 
   function submitItem() {
-    // เพิ่มตรรกะการ submit item ไปยังฐานข้อมูลที่นี่
     dispatch('save', { name: itemName, quantity: itemQuantity, unit: itemUnit });
     closeModal();
   }
@@ -37,7 +36,7 @@ export let showModal: boolean = false;
               id="itemName"
               class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               bind:value={itemName}
-              placeholder="ชื่อ"
+              placeholder=""
               required
             />
           </div>
@@ -51,7 +50,7 @@ export let showModal: boolean = false;
               id="itemQuantity"
               class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               bind:value={itemQuantity}
-              placeholder="เท่าไหร่?"
+              placeholder="0"
               required
             />
           </div>
@@ -65,7 +64,7 @@ export let showModal: boolean = false;
               id="itemUnit"
               class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               bind:value={itemUnit}
-              placeholder="หน่วยอะไร?"
+              placeholder="Unit"
               required
             />
           </div>
