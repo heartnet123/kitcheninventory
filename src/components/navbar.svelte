@@ -33,13 +33,11 @@
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
   }
 
-  /* Desktop sidebar specific styles */
   .sidebar-desktop {
     padding-top: 41px; /* Match titlebar height */
     transition: all 0.3s ease;
   }
 
-  /* Menu item hover effects */
   :global(.menu li > *:hover) {
     background: rgba(255, 255, 255, 0.1) !important;
     border: 1px solid rgba(255, 255, 255, 0.2);
@@ -47,13 +45,11 @@
     -webkit-backdrop-filter: blur(12px);
   }
 
-  /* Active menu item */
   :global(.menu li > *.active) {
-    background: rgba(91, 190, 195, 0.25) !important;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(249, 0, 183, 0.25) !important;
+    border: 4px solid rgba(255, 255, 255, 0.001);
   }
 
-  /* Version display area */
   .version-area {
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     background: oklch(94% 0.028 342.258);
@@ -111,8 +107,8 @@
 
   <!-- Desktop Sidebar - Fixed position -->
   <div class="hidden lg:flex lg:w-64 lg:fixed lg:top-0 lg:left-0 lg:h-screen lg:flex-col glass-nav sidebar-desktop">
-    <div class="mt-6 p-4">
-      <ul class="menu space-y-1">
+    <div class="mt-6 p-10">
+      <ul class="menu space-y-4">
         {#each items as item}
           <li>
             <a 

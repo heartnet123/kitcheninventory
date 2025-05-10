@@ -52,19 +52,23 @@
     onMount(() => {
       getItems();
     });
-async function handleSaveNewItem(event: CustomEvent<{ name: string; quantity: number; unit: string}>) {
-      const { name, quantity, unit } = event.detail;
+async function handleSaveNewItem(event: CustomEvent<{ name: string; quantity: number; unit: string; category: string }>) { // Add category to event detail type
+      const { name, quantity, unit, category } = event.detail; // Destructure category
       const newItem = {
-        id: Date.now(),
+        id: Date.now(), // Consider using a more robust ID generation if needed
         name,
-        category: '',
+        category: category, // Use the received category
         quantity,
         unit
       };
       try {
         const db = await Database.load("sqlite:inventory.db");
-        await db.execute(`INSERT INTO items (id, name, category, quantity, unit) VALUES (${newItem.id}, '${newItem.name}', '${newItem.category}', ${newItem.quantity}, '${newItem.unit}')`);
-        items = [...items, newItem];
+        // Use parameterized query to prevent SQL injection vulnerabilities
+        await db.execute(
+          "INSERT INTO items (id, name, category, quantity, unit) VALUES ($1, $2, $3, $4, $5)",
+          [newItem.id, newItem.name, newItem.category, newItem.quantity, newItem.unit]
+        );
+        items = [...items, newItem]; // Update local state
       } catch (err) {
         console.log(err);
         error = "Failed to add item - check console";
@@ -76,7 +80,7 @@ async function handleSaveNewItem(event: CustomEvent<{ name: string; quantity: nu
     let selectedCategory = "All";
     
     // Available categories
-    const categories = ["All", "Dairy", "Bakery", "Fruit", "Vegetables", "Meat", "Grains", "Other"]; 
+    const categories = ["All", "Dairy", "Bakery", "Fruit", "Vegetables", "Meat", "Grains", "Dry product", "Other"]; 
   
     // Pagination state
     let currentPage = 1;

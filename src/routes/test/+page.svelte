@@ -1,17 +1,59 @@
-<script>
+<script lang="ts">
+  // ... โค้ด script ของคุณทั้งหมดอยู่ที่นี่ ...
+  import { open } from '@tauri-apps/plugin-dialog';
+  import { convertFileSrc } from '@tauri-apps/api/core'; 
+  import { onMount } from 'svelte';
 
-import { open } from '@tauri-apps/plugin-dialog';
   let isOpen = false;
   let itemName = '';
-  // @ts-ignore
-  let itemQuantity = 0; 
+  let selectedFilePath: string | null = null;
+let error: string | null = null;
+let imageSrc: string | null = null;
+let dialogElement: HTMLDialogElement; // เพิ่มตัวแปรสำหรับอ้างอิง dialog
 
-  // @ts-ignore
-  const file = await open({
-  multiple: false,
-  directory: false,
-});
-console.log(file);
+// Reactive statement สำหรับควบคุมการเปิด/ปิด dialog
+$: if (dialogElement) {
+  if (isOpen) {
+    dialogElement.showModal();
+  } else {
+    // ตรวจสอบว่า dialog เปิดอยู่ก่อนที่จะพยายามปิด
+    if (dialogElement.open) {
+       dialogElement.close();
+    }
+  }
+}
+
+// Derived variable for filename
+$: selectedFileName = selectedFilePath ? selectedFilePath.split(/[\\/]/).pop() : '';
+
+async function selectFile() {
+  error = null;
+    imageSrc = null;
+    selectedFilePath = null;
+    try {
+      const file = await open({
+        multiple: false,
+        directory: false,
+        filters: [{
+          name: 'Images',
+          extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp']
+        }]
+      });
+
+      if (typeof file === 'string') {
+        selectedFilePath = file;
+        imageSrc = convertFileSrc(file); // ใช้ convertFileSrc ที่ import มา
+        console.log('Selected image file:', selectedFilePath);
+        console.log('Image source for display:', imageSrc);
+      } else {
+         console.log('No file selected or dialog cancelled.');
+      }
+    } catch (err) {
+      console.error("Error opening file dialog:", err);
+      error = `Failed to open file dialog: ${err}`;
+    }
+  }
+
   function openModal() {
     isOpen = true;
   }
@@ -19,19 +61,53 @@ console.log(file);
   function closeModal() {
     isOpen = false;
   }
-  
+
   function addItem() {
     console.log("Adding item:", itemName);
+    console.log("Associated file:", selectedFilePath);
     closeModal();
+    itemName = '';
+    selectedFilePath = null;
+    imageSrc = null;
+    error = null;
   }
 </script>
-<div class="max-w-7xl ms-auto mt-10">
-<button class="btn" on:click={openModal}>open modal</button>
+
+<!-- ส่วน HTML ที่จะแสดงผล -->
+<div class="max-w-7xl ms-auto mt-10 p-4 space-y-4">
+  <!-- ปุ่มสำหรับเปิด Modal -->
+  <button class="btn" on:click={openModal}>Open Add Item Modal</button>
+
+  <!-- ปุ่มสำหรับเลือกไฟล์รูปภาพ -->
+  <button class="btn btn-secondary" on:click={selectFile}>Select Image File</button>
+
+  <!-- แสดง path ของไฟล์ที่เลือก -->
+  {#if selectedFilePath}
+    <p class="text-sm">Selected File Path: {selectedFilePath}</p>
+  {/if}
+
+  <!-- แสดงรูปภาพที่เลือก -->
+  {#if imageSrc}
+    <div class="mt-4">
+      <p class="text-sm font-medium">Selected Image Preview:</p>
+      <img src={imageSrc} alt="Selected Preview" class="max-w-xs max-h-64 border rounded mt-2" />
+    </div>
+  {/if}
+
+  <!-- แสดงข้อผิดพลาด (ถ้ามี) -->
+  {#if error}
+      <div class="alert alert-error">
+        <span>{error}</span>
+      </div>
+  {/if}
 </div>
-<dialog id="my_modal_1" class="modal" open={isOpen} on:close={closeModal}>
+
+<!-- Modal สำหรับเพิ่ม Item -->
+<dialog id="my_modal_1" class="modal" bind:this={dialogElement}>
   <div class="modal-box">
     <h3 class="text-lg font-bold">Add New Item</h3>
-    <form on:submit|preventDefault={addItem}>
+    <form method="dialog" on:submit|preventDefault={addItem}>
+      <button type="button" class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" on:click={closeModal}>✕</button>
       <div class="py-4">
         <label for="itemName" class="block text-gray-700 text-sm font-bold mb-2">
           Item Name:
@@ -45,61 +121,46 @@ console.log(file);
           required
         />
       </div>
+      <!-- แสดงข้อมูลรูปภาพที่เลือกใน Modal -->
+      {#if selectedFilePath}
+        <div class="py-2">
+          <p class="text-sm">Associated Image: {selectedFileName}</p>
+          {#if imageSrc}
+             <img src={imageSrc} alt="Selected Preview" class="max-w-xs max-h-24 border rounded mt-1" />
+          {/if}
+          <p class="text-xs text-gray-500 mt-1">Note: Image selection happens outside the modal.</p>
+        </div>
+      {/if}
       <div class="modal-action">
-        <button type="button" class="btn" on:click={closeModal}>Cancel</button>
-        <button type="submit" class="btn btn-primary">Add</button>
+        <button type="button" class="btn" on:click={closeModal}>Cancel</button> 
+        <button type="submit" class="btn btn-primary">Add</button> 
       </div>
     </form>
   </div>
+   <form method="dialog" class="modal-backdrop"> 
+    <button type="button" on:click={closeModal}>close</button>
+  </form>
 </dialog>
 
+<!-- ส่วน Style (ถ้ามี) -->
 <style>
-  /* Style to center the modal */
-  .modal {
-    display: none; /* Hidden by default */
-    position: fixed; /* Stay in place */
-    z-index: 1; /* Sit on top */
-    left: 0;
-    top: 0;
-    width: 100%; /* Full width */
-    height: 100%; /* Full height */
-    overflow: auto; /* Enable scroll if needed */
-    background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
-    display: flex; /* Enable flexbox for centering */
-    align-items: center; /* Vertically center content */
-    justify-content: center; /* Horizontally center content */
-  }
-
-  .modal[open] {
-    display: flex;
-  }
-
-  .modal-box {
-    background-color: #fefefe;
-    padding: 20px;
-    border: 1px solid #888;
-    width: 80%; /* Adjust width as needed */
-    max-width: 500px; /* Optional: set a maximum width */
-    border-radius: .5rem;
-  }
-
-  .modal-action {
-    display: flex;
-    justify-content: flex-end;
-  }
-
-  .btn {
-    /* Basic button styling - you might want to use your existing CSS */
-    padding: 0.5rem 1rem;
-    border: none;
+  /* เพิ่ม style ที่จำเป็น */
+  .alert {
+    padding: 1rem;
     border-radius: 0.25rem;
-    cursor: pointer;
-    font-size: 1rem;
-    background-color: #007bff;
+    margin-bottom: 1rem;
+  }
+  .alert-error {
+    color: #721c24;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+  }
+  .btn-secondary {
+    /* ตัวอย่าง style */
+    background-color: #6c757d;
     color: white;
   }
-
-  .btn:hover {
-    background-color: #0056b3;
+  .btn-secondary:hover {
+    background-color: #5a6268;
   }
 </style>

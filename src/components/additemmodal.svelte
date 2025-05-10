@@ -1,21 +1,24 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-export let showModal: boolean = false;
+  export let showModal: boolean = false;
   let itemName = "";
   let itemQuantity = "";
   let itemUnit = "";
-  let itemCategory = "";
+  let itemCategory = ""; // Variable to hold the selected category
+  const categories = ["Dairy", "Bakery", "Fruit", "Vegetables", "Meat", "Grains", "Dry product", "Other"]; // Define categories
   const dispatch = createEventDispatcher();
 
   function closeModal() {
     dispatch('close');
     itemName = "";
-    itemQuantity = ""; // Reset item quantity
+    itemQuantity = "";
     itemUnit = "";
+    itemCategory = ""; // Reset item category
   }
 
   function submitItem() {
-    dispatch('save', { name: itemName, quantity: itemQuantity, unit: itemUnit });
+    // Dispatch category along with other item details
+    dispatch('save', { name: itemName, quantity: itemQuantity, unit: itemUnit, category: itemCategory });
     closeModal();
   }
 </script>
@@ -67,6 +70,23 @@ export let showModal: boolean = false;
               placeholder="Unit"
               required
             />
+          </div>
+
+          <div class="mb-4">
+            <label for="itemCategory" class="block text-gray-700 text-sm font-bold mb-2">
+              หมวดหมู่ :
+            </label>
+            <select
+              id="itemCategory"
+              class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              bind:value={itemCategory}
+              required
+            >
+              <option value="" disabled selected>Select a category</option>
+              {#each categories as category}
+                <option value={category}>{category}</option>
+              {/each}
+            </select>
           </div>
 
         </div>

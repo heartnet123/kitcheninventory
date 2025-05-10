@@ -4,23 +4,38 @@
   import "../../style.css";
   import AddRecipeModal from '../../components/AddRecipeModal.svelte';
 
-  // Define the structure of a recipe item based on potential database columns
   interface Recipe {
     id: number;
     name: string;
-    ingredients_count: number; // Assuming a column like this exists
+    ingredients_count: number;
     selling_price: number;
     cost: number;
     profit: number;
     profit_margin: number;
-    image_url: string;
+    image: Uint8Array; // <-- Changed type to handle blob data
   }
+
+  // Helper function to convert Uint8Array (Blob) to Base64 Data URL
+  function blobToDataURL(blobData: Uint8Array | null | undefined): string {
+    if (!blobData || blobData.length === 0) {
+      // Return a placeholder or default image URL if blob is empty or null
+      return '/placeholder.png'; // Adjust path as needed
+    }
+    try {
+      const base64String = btoa(String.fromCharCode(...blobData));
+      return `data:image/png;base64,${base64String}`; 
+    } catch (e) {
+      console.error("Error converting blob to Data URL:", e);
+      return '/placeholder.png'; 
+    }
+  }
+
 
   let recipes: Recipe[] = [];
   let searchTerm = "";
   let db: Database | null = null;
   let error: string | null = null;
-  let showAddRecipeModal = false; // State to control modal visibility
+  let showAddRecipeModal = false;
 
   function openModal() {
     showAddRecipeModal = true;
@@ -54,8 +69,6 @@
       console.log("Database loaded successfully.");
 
       console.log("Executing query to fetch recipes...");
-      // Adjust the query based on your actual table structure
-      // Assuming columns: id, name, ingredients_count, selling_price, cost, profit, profit_margin, image_url
       const result = await db.select<Recipe[]>("SELECT id, name, selling_price, image FROM recipes");
       console.log("Query successful, fetched recipes:", result);
       recipes = result;
@@ -109,10 +122,9 @@
             <img
               alt="{recipe.name}"
               class="w-full h-48 object-cover"
-              src={recipe.image_url} 
+              src={blobToDataURL(recipe.image)} 
             />
-            <!-- Comment moved outside the tag -->
-            <!-- Updated field name for src -->
+            <!-- Call the conversion function -->
             <div class="p-4">
               <h2 class="text-xl font-bold mb-2">{recipe.name}</h2>
               <!-- Updated field name -->
@@ -160,7 +172,10 @@
   </div>
 
   {#if showAddRecipeModal}
-    <AddRecipeModal on:close={closeModal} />
+    <AddRecipeModal on:close={closeModal} on:recipesaved={() => {
+      closeModal();
+      getRecipes();
+    }} />
   {/if}
 </div>
 

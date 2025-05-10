@@ -82,7 +82,7 @@
 </style>
 
 <div class="titlebar">
-  <div class="title">Smart Inventory</div>
+  <div class="title"></div>
   <div class="buttons">
     <button type="button" class="titlebar-button" on:click={minimize}>
       <img src="https://api.iconify.design/mdi:window-minimize.svg" alt="Minimize" />

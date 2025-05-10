@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
   import Database from "@tauri-apps/plugin-sql";
+  import { open } from '@tauri-apps/plugin-dialog';
 
   interface InventoryItem {
     id: number;
@@ -92,6 +93,7 @@
           }
         }
         console.log('Recipe added successfully with ID:', recipeId);
+        dispatch('recipesaved'); // Dispatch event to indicate recipe was saved
         closeModal(); // Close modal on success
       } else {
          throw new Error("Failed to get last insert ID for recipe.");

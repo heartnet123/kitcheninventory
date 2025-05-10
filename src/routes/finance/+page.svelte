@@ -1,21 +1,22 @@
 <script lang="ts">
     import { onMount } from 'svelte';
-    import Database from '@tauri-apps/plugin-sql'; // Use SQL plugin
+    import Database from '@tauri-apps/plugin-sql';
+    import AddEditExpenseModal from '../../components/AddEditExpenseModal.svelte'; // Import the modal
 
-    // Define interfaces for data structures
+    // Define the type for an expense, aligning with AddEditExpenseModal and database
     interface Expense {
       id: number;
-      date: string; // Consider using Date type if appropriate
+      date: string; // Keep as string for simplicity with DB and form
       category: string;
       amount: number;
       store: string;
-      items: number; // Assuming this field exists in your DB table
-      // Add other relevant fields from your expenses table
+      items: number; // Represents quantity or number of items in the expense
+      // description?: string; // Optional: if you add a description field
     }
 
     // Reactive variables for real data
     let financeStats: { title: string; value: string; desc: string; icon: string }[] = [];
-    let expenses: Expense[] = [];
+    let expenses: Expense[] = []; // Use the Expense interface
     let categorySpending: { category: string; amount: number }[] = [];
     let db: Database | null = null;
     let error: string | null = null;
@@ -29,20 +30,16 @@
         db = await Database.load("sqlite:inventory.db"); // Assuming finance data is in the same DB
 
         // --- Fetch Expenses ---
-        // Replace 'expenses_table' and column names with your actual table structure
-        // Example: SELECT id, date, category, amount, store, items FROM expenses_table ORDER BY date DESC
-        const fetchedExpenses = await db.select<Expense[]>("SELECT id, date, category, amount, store, items FROM expenses ORDER BY date DESC"); // Adjust query as needed
+        const fetchedExpenses = await db.select<Expense[]>("SELECT id, record_date, amount, quantity FROM financial_records ORDER BY record_date DESC"); // Adjust query as needed
         expenses = fetchedExpenses;
 
         // --- Calculate Stats & Category Spending ---
-        // Use the fetched expenses data for calculations
         financeStats = calculateFinanceStats(expenses);
         categorySpending = calculateCategorySpending(expenses);
 
       } catch (err) {
         console.error("Error loading finance data:", err);
         error = `Failed to load finance data: ${err}`;
-        // Initialize with empty/default states on error
         expenses = [];
         financeStats = [
           { title: "Monthly Budget", value: "Error", desc: "N/A", icon: "💵" },
@@ -57,7 +54,7 @@
     }
 
     // Placeholder functions for calculations (implement these based on your needs)
-    function calculateFinanceStats(data: Expense[]) {
+    function calculateFinanceStats(data: Expense[]) { // data is already Expense[]
         if (!data || data.length === 0) {
              return [
                 { title: "Monthly Budget", value: "$0", desc: "No data", icon: "💵" },
@@ -98,15 +95,16 @@
     let selectedStore = "All";
 
     // Dynamically generate categories and stores from loaded expenses
-    $: availableCategories = ["All", ...new Set(expenses.map(e => e.category))];
-    $: availableStores = ["All", ...new Set(expenses.map(e => e.store))];
+    // Ensure category and store are not undefined before mapping
+    $: availableCategories = ["All", ...new Set(expenses.filter(e => e.category).map(e => e.category))];
+    $: availableStores = ["All", ...new Set(expenses.filter(e => e.store).map(e => e.store))];
 
     // Filtered items based on search query and filters
     $: filteredExpenses = expenses.filter(item => {
       const matchesSearch = searchQuery === "" ||
-        item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.store.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.date.includes(searchQuery); // Allow searching by date
+        (item.category && item.category.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (item.store && item.store.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (item.date && item.date.includes(searchQuery)); // Allow searching by date
 
       const matchesCategory = selectedCategory === "All" || item.category === selectedCategory;
       const matchesStore = selectedStore === "All" || item.store === selectedStore;
@@ -115,63 +113,78 @@
     });
 
     // Calculate totals based on filtered expenses
-    $: totalSpent = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0).toFixed(2);
-    $: totalItems = filteredExpenses.reduce((sum, expense) => sum + expense.items, 0);
+    $: totalSpent = filteredExpenses.reduce((sum, expense) => sum + (expense.amount || 0), 0).toFixed(2);
+    $: totalItems = filteredExpenses.reduce((sum, expense) => sum + (expense.items || 0), 0);
+
 
     // --- Add Expense Functionality ---
     let showAddExpenseModal = false;
-    function openAddExpenseModal() {
+    let expenseToEdit: Expense | null = null; // For editing functionality later
+
+    function openAddExpenseModal(expense: Expense | null = null) {
+        expenseToEdit = expense; // Set if editing, null if adding new
         showAddExpenseModal = true;
-        // Potentially pass existing expense data if editing
     }
     function closeAddExpenseModal() {
         showAddExpenseModal = false;
+        expenseToEdit = null; // Reset when closing
     }
-    async function handleSaveExpense(event: CustomEvent<Expense>) { // Assuming modal returns a full Expense object
-        const newExpense = event.detail;
+    async function handleSaveExpense(event: CustomEvent<Expense>) {
+        const expenseData = event.detail;
         isLoading = true;
         error = null;
         try {
             if (!db) {
                 throw new Error("Database not initialized");
             }
-            // Replace with your actual INSERT statement and table name
-            await db.execute(
-                "INSERT INTO expenses (date, category, amount, store, items) VALUES ($1, $2, $3, $4, $5)",
-                [newExpense.date, newExpense.category, newExpense.amount, newExpense.store, newExpense.items]
-            );
-            // Refresh data after adding
-            await loadData();
-            closeAddExpenseModal();
+            // TODO: Implement logic for updating if expenseData.id exists (editing)
+            if (expenseData.id) {
+                console.warn("Update functionality not fully implemented yet.");
+                // For now, we'll just reload data. Implement proper update if needed.
+                 await db.execute(
+                   "UPDATE expenses SET date = $1, category = $2, amount = $3, store = $4, items = $5 WHERE id = $6",
+                   [expenseData.date, expenseData.category, expenseData.amount, expenseData.store, expenseData.items, expenseData.id]
+                 );
+            } else {
+                // Insert new expense
+                await db.execute(
+                    "INSERT INTO expenses (date, category, amount, store, items) VALUES ($1, $2, $3, $4, $5)",
+                    [expenseData.date, expenseData.category, expenseData.amount, expenseData.store, expenseData.items]
+                );
+            }
+            await loadData(); // Refresh data
+            closeAddExpenseModal(); // Close modal on success
         } catch (err) {
             console.error("Error saving expense:", err);
             error = `Failed to save expense: ${err}`;
-            isLoading = false; // Keep modal open or show error within modal?
+            // isLoading = false; // loadData will set this
         }
-        // No finally isLoading = false here, loadData handles it
+        // loadData() handles isLoading = false
     }
 
-    // --- Delete Expense Functionality ---
+    // --- Edit and Delete Expense Functionality ---
+    function editExpense(expense: Expense) {
+        openAddExpenseModal(expense);
+    }
+
     async function deleteExpense(id: number) {
         if (!db) {
             error = "Database not initialized.";
             return;
         }
-        if (!confirm(`Are you sure you want to delete expense ID ${id}?`)) {
+        if (!confirm(`Are you sure you want to delete expense ID ${id}? This action cannot be undone.`)) {
             return;
         }
         isLoading = true;
         error = null;
         try {
-            // Replace with your actual DELETE statement and table name
             await db.execute("DELETE FROM expenses WHERE id = $1", [id]);
-            // Refresh data after deleting
-            await loadData();
+            await loadData(); // Refresh data
         } catch (err) {
             console.error(`Error deleting expense with id: ${id}:`, err);
             error = `Failed to delete expense: ${err}`;
         } finally {
-            isLoading = false; // Ensure loading state is reset even on error
+            // isLoading = false; // loadData will set this
         }
     }
 
@@ -189,20 +202,13 @@
       }
     }
 
-    import AddEditExpenseModal from '../../components/AddEditExpenseModal.svelte'; // Import the modal
-
 </script>
-
-<!-- Import Add/Edit Modal Component -->
-<!-- Assuming you have a component like AddEditExpenseModal.svelte -->
-<!-- import AddEditExpenseModal from '../../components/AddEditExpenseModal.svelte'; -->
 
 <div class="fade-in container mx-auto px-4 py-8 w-full min-h-screen p-0">
   <div class="max-w-7xl ms-auto mt-10">
     <div class="flex justify-between items-center mb-8">
       <h1 class="text-3xl font-bold">Finance Analytics</h1>
-      <!-- Update button to open your modal -->
-      <button class="btn btn-secondary" on:click={openAddExpenseModal}>Add Expense</button>
+      <button class="btn btn-secondary" on:click={() => openAddExpenseModal()}>Add Expense</button>
     </div>
 
     {#if isLoading}
@@ -370,11 +376,10 @@
                     <td>{expense.category}</td>
                     <td>{expense.store}</td>
                     <td>{expense.items}</td>
-                    <td>${expense.amount.toFixed(2)}</td>
+                    <td>${(expense.amount || 0).toFixed(2)}</td>
                     <td>
                       <div class="flex gap-2">
-                        <!-- Add Edit button functionality later -->
-                        <button class="btn btn-xs btn-ghost btn-info">Edit</button>
+                        <button class="btn btn-xs btn-ghost btn-info" on:click={() => editExpense(expense)}>Edit</button>
                         <button class="btn btn-xs btn-error btn-ghost" on:click={() => deleteExpense(expense.id)}>Delete</button>
                       </div>
                     </td>
@@ -433,19 +438,15 @@
 
   </div> <!-- Close max-w-7xl -->
 
-  <!-- Modal Placeholder -->
+  <!-- Add/Edit Expense Modal -->
   {#if showAddExpenseModal}
-    <!-- Replace with your actual modal component instance -->
-    <!-- Example: <AddEditExpenseModal showModal={showAddExpenseModal} on:close={closeAddExpenseModal} on:save={handleSaveExpense} /> -->
-     <div class="modal modal-open">
-       <div class="modal-box">
-         <h3 class="font-bold text-lg">Add Expense (Placeholder)</h3>
-         <p class="py-4">Replace this with your AddEditExpenseModal component.</p>
-         <div class="modal-action">
-           <button class="btn" on:click={closeAddExpenseModal}>Close</button>
-         </div>
-       </div>
-     </div>
+    <AddEditExpenseModal
+      expense={expenseToEdit}
+      categories={availableCategories.filter(c => c !== 'All')}
+      stores={availableStores.filter(s => s !== 'All')}
+      on:close={closeAddExpenseModal}
+      on:save={handleSaveExpense}
+    />
   {/if}
 
 </div> <!-- Close fade-in container -->
