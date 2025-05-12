@@ -1,134 +1,155 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import Database from '@tauri-apps/plugin-sql';
-    import AddEditExpenseModal from '../../components/AddEditExpenseModal.svelte'; // Import the modal
+    import AddEditExpenseModal from '../../components/AddEditExpenseModal.svelte';
 
-    // Define the type for an expense, aligning with AddEditExpenseModal and database
     interface Expense {
       id: number;
-      date: string; // Keep as string for simplicity with DB and form
-      category: string;
+      record_date: string; // Changed from date
       amount: number;
-      store: string;
-      items: number; // Represents quantity or number of items in the expense
-      // description?: string; // Optional: if you add a description field
+      quantity: number;    // Was items
+      record_type: 'Expense' | 'Income';
+      description: string; // Added
+      recipe_id?: number;   // Added (optional)
     }
 
-    // Reactive variables for real data
     let financeStats: { title: string; value: string; desc: string; icon: string }[] = [];
-    let expenses: Expense[] = []; // Use the Expense interface
-    let categorySpending: { category: string; amount: number }[] = [];
+    let expenses: Expense[] = [];
+    // let categorySpending: { category: string; amount: number }[] = []; // Category removed
     let db: Database | null = null;
     let error: string | null = null;
     let isLoading = true;
+    let recipes: Array<{ id: number; name: string; selling_price: number }> = [];
 
-    // Function to fetch data using SQL plugin
     async function loadData() {
       isLoading = true;
       error = null;
       try {
-        db = await Database.load("sqlite:inventory.db"); // Assuming finance data is in the same DB
-
-        // --- Fetch Expenses ---
-        const fetchedExpenses = await db.select<Expense[]>("SELECT id, record_date, amount, quantity FROM financial_records ORDER BY record_date DESC"); // Adjust query as needed
+        db = await Database.load("sqlite:inventory.db");
+        // Updated SELECT query to include description and recipe_id
+        const fetchedExpenses = await db.select<Expense[]>("SELECT id, record_date, amount, quantity, record_type, description, recipe_id FROM financial_records ORDER BY record_date DESC");
         expenses = fetchedExpenses;
 
-        // --- Calculate Stats & Category Spending ---
+        const fetchedRecipes = await db.select<Array<{ id: number; name: string; selling_price: number }>>("SELECT id, name, selling_price FROM recipes");
+        recipes = fetchedRecipes;
+
         financeStats = calculateFinanceStats(expenses);
-        categorySpending = calculateCategorySpending(expenses);
+        // categorySpending = calculateCategorySpending(expenses); // Category removed
 
       } catch (err) {
-        console.error("Error loading finance data:", err);
-        error = `Failed to load finance data: ${err}`;
+        error = `ไม่สามารถโหลดข้อมูลทางการเงินและสูตรอาหารได้: ${err}`;
         expenses = [];
         financeStats = [
-          { title: "Monthly Budget", value: "Error", desc: "N/A", icon: "💵" },
-          { title: "Spent This Month", value: "Error", desc: "N/A", icon: "📊" },
-          { title: "Savings", value: "Error", desc: "N/A", icon: "💰" },
-          { title: "Avg. Cost Per Meal", value: "Error", desc: "N/A", icon: "🍽️" },
+          { title: "งบประมาณรายเดือน", value: "Error", desc: "N/A", icon: "💵" },
+          { title: "กำไรทั้งหมด", value: "Error", desc: "N/A", icon: "📊" },
+          { title: "เงินออม", value: "Error", desc: "N/A", icon: "💰" },
+          { title: "ค่าอาหารเฉลี่ยต่อมื้อ", value: "Error", desc: "N/A", icon: "🍽️" },
         ];
-        categorySpending = [];
+        // categorySpending = []; // Category removed
       } finally {
         isLoading = false;
       }
     }
 
-    // Placeholder functions for calculations (implement these based on your needs)
-    function calculateFinanceStats(data: Expense[]) { // data is already Expense[]
+    function calculateFinanceStats(data: Expense[]) {
+        const monthlyBudget = 5000;
         if (!data || data.length === 0) {
              return [
-                { title: "Monthly Budget", value: "$0", desc: "No data", icon: "💵" },
-                { title: "Spent This Month", value: "$0", desc: "No data", icon: "📊" },
-                { title: "Savings", value: "$0", desc: "No data", icon: "💰" },
-                { title: "Avg. Cost Per Meal", value: "$0", desc: "No data", icon: "🍽️" },
+                { title: "งบประมาณ", value: `${monthlyBudget} บาท`, desc: "", icon: "💵" },
+                { title: "กำไรทั้งหมด", value: "0 บาท", desc: "0% ของงบประมาณ", icon: "📊" },
+                { title: "เงินออม", value: `${monthlyBudget} บาท`, desc: "100% คงเหลือ", icon: "💰" },
+                { title: "ค่าอาหารเฉลี่ยต่อมื้อ", value: "0 บาท", desc: "จากค่าใช้จ่าย", icon: "🍽️" },
             ];
         }
-      // --- Example Calculation Logic ---
-      const monthlyBudget = 450; // Example budget, replace with dynamic value if needed
-      const totalSpent = data.reduce((sum, expense) => sum + expense.amount, 0);
+
+      const totalSpent = data
+        .filter(expense => expense.record_type === 'Expense')
+        .reduce((sum, expense) => sum + expense.amount, 0);
       const savings = monthlyBudget - totalSpent;
-      const avgCostPerMeal = data.length > 0 ? (totalSpent / data.reduce((sum, exp) => sum + (exp.items || 1), 0)) : 0; // Avoid division by zero, assumes 'items' represents meals/items contributing to cost
+      const expenseQuantityCount = data // Changed from expenseItemsCount
+        .filter(expense => expense.record_type === 'Expense')
+        .reduce((sum, exp) => sum + (exp.quantity || 0), 0); // Changed from exp.items
+      const avgCostPerMeal = expenseQuantityCount > 0 ? (totalSpent / expenseQuantityCount) : 0;
 
       return [
-          { title: "Monthly Budget", value: `$${monthlyBudget.toFixed(2)}`, desc: "For Current Month", icon: "💵" },
-          { title: "Spent This Month", value: `$${totalSpent.toFixed(2)}`, desc: `${((totalSpent / monthlyBudget) * 100).toFixed(0)}% of budget`, icon: "📊" },
-          { title: "Savings", value: `$${savings.toFixed(2)}`, desc: `${((savings / monthlyBudget) * 100).toFixed(0)}% remaining`, icon: "💰" },
-          { title: "Avg. Cost Per Meal", value: `$${avgCostPerMeal.toFixed(2)}`, desc: "Based on expenses", icon: "🍽️" },
+          { title: "งบประมาณรายเดือน", value: `${monthlyBudget} บาท`, desc: "สำหรับเดือนปัจจุบัน", icon: "💵" },
+          { title: "กำไรทั้งหมด", value: `${totalSpent} บาท`, desc: `${monthlyBudget > 0 ? ((totalSpent / monthlyBudget) * 100).toFixed(0) : 0}% ของงบประมาณ`, icon: "📊" },
+          { title: "เงินออม", value: `${savings} บาท`, desc: `${monthlyBudget > 0 ? ((savings / monthlyBudget) * 100).toFixed(0) : 0}% คงเหลือ`, icon: "💰" },
+          { title: "ค่าอาหารเฉลี่ยต่อมื้อ", value: `${avgCostPerMeal} บาท`, desc: "จากค่าใช้จ่าย", icon: "🍽️" },
         ];
     }
 
-     function calculateCategorySpending(data: Expense[]) {
-       const spendingMap = new Map<string, number>();
-       data.forEach(expense => {
-         spendingMap.set(expense.category, (spendingMap.get(expense.category) || 0) + expense.amount);
-       });
-       // Sort categories by amount descending for chart display
-       return Array.from(spendingMap, ([category, amount]) => ({ category, amount }))
-                   .sort((a, b) => b.amount - a.amount);
-     }
+    // function calculateCategorySpending(data: Expense[]) { // Removed as category is no longer a field
+    //   const spendingMap = new Map<string, number>();
+    //   data.filter(expense => expense.record_type === 'Expense').forEach(expense => {
+    //     // Need a new way to categorize if this feature is desired
+    //     // spendingMap.set(expense.category, (spendingMap.get(expense.category) || 0) + expense.amount);
+    //   });
+    //   return Array.from(spendingMap, ([category, amount]) => ({ category, amount }))
+    //               .sort((a, b) => b.amount - a.amount);
+    // }
 
-    onMount(loadData); // Load data when the component mounts
+    onMount(loadData);
 
-    // For filtering
     let searchQuery = "";
-    let selectedCategory = "All";
-    let selectedStore = "All";
+    // Removed category and store filters as these fields are gone
+    // let selectedCategory = "All";
+    // let selectedStore = "All";
 
-    // Dynamically generate categories and stores from loaded expenses
-    // Ensure category and store are not undefined before mapping
-    $: availableCategories = ["All", ...new Set(expenses.filter(e => e.category).map(e => e.category))];
-    $: availableStores = ["All", ...new Set(expenses.filter(e => e.store).map(e => e.store))];
+    // $: availableCategories = ["All", ...new Set(expenses.filter(e => e.category).map(e => e.category))]; // Removed
+    // $: availableStores = ["All", ...new Set(expenses.filter(e => e.store).map(e => e.store))]; // Removed
 
-    // Filtered items based on search query and filters
     $: filteredExpenses = expenses.filter(item => {
       const matchesSearch = searchQuery === "" ||
-        (item.category && item.category.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (item.store && item.store.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (item.date && item.date.includes(searchQuery)); // Allow searching by date
+        (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase())) || // Search in description
+        (item.record_type && item.record_type.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (item.record_date && item.record_date.includes(searchQuery)); // Search in record_date
 
-      const matchesCategory = selectedCategory === "All" || item.category === selectedCategory;
-      const matchesStore = selectedStore === "All" || item.store === selectedStore;
+      // Removed category and store matching
+      // const matchesCategory = selectedCategory === "All" || item.category === selectedCategory;
+      // const matchesStore = selectedStore === "All" || item.store === selectedStore;
 
-      return matchesSearch && matchesCategory && matchesStore;
+      return matchesSearch; // && matchesCategory && matchesStore;
     });
 
-    // Calculate totals based on filtered expenses
-    $: totalSpent = filteredExpenses.reduce((sum, expense) => sum + (expense.amount || 0), 0).toFixed(2);
-    $: totalItems = filteredExpenses.reduce((sum, expense) => sum + (expense.items || 0), 0);
+    $: totalSpentFiltered = filteredExpenses.reduce((sum, expense) => sum + (expense.amount || 0), 0);
+    $: totalItemsFiltered = filteredExpenses.reduce((sum, expense) => sum + (expense.quantity || 0), 0); // Changed from items to quantity
 
-
-    // --- Add Expense Functionality ---
     let showAddExpenseModal = false;
-    let expenseToEdit: Expense | null = null; // For editing functionality later
+    let expenseToEdit: Expense | null = null;
 
     function openAddExpenseModal(expense: Expense | null = null) {
-        expenseToEdit = expense; // Set if editing, null if adding new
+        expenseToEdit = expense;
         showAddExpenseModal = true;
     }
     function closeAddExpenseModal() {
         showAddExpenseModal = false;
-        expenseToEdit = null; // Reset when closing
+        expenseToEdit = null;
     }
+    async function adjustInventoryForRecipe(recipeId: number, quantitySold: number, operation: 'decrease' | 'increase') {
+        if (!db) throw new Error("Database not initialized for inventory adjustment");
+
+        const recipeItems = await db.select<Array<{ item_id: number; quantity: number }>>(
+            "SELECT item_id, quantity FROM recipe_items WHERE recipe_id = $1",
+            [recipeId]
+        );
+
+        for (const recipeItem of recipeItems) {
+            const adjustmentQuantity = recipeItem.quantity * quantitySold;
+            if (operation === 'decrease') {
+                await db.execute(
+                    "UPDATE inventory SET quantity = quantity - $1 WHERE id = $2",
+                    [adjustmentQuantity, recipeItem.item_id]
+                );
+            } else { // increase
+                await db.execute(
+                    "UPDATE inventory SET quantity = quantity + $1 WHERE id = $2",
+                    [adjustmentQuantity, recipeItem.item_id]
+                );
+            }
+        }
+    }
+
     async function handleSaveExpense(event: CustomEvent<Expense>) {
         const expenseData = event.detail;
         isLoading = true;
@@ -137,32 +158,51 @@
             if (!db) {
                 throw new Error("Database not initialized");
             }
-            // TODO: Implement logic for updating if expenseData.id exists (editing)
+
+            let oldExpenseData: Expense | undefined = undefined;
             if (expenseData.id) {
-                console.warn("Update functionality not fully implemented yet.");
-                // For now, we'll just reload data. Implement proper update if needed.
+                oldExpenseData = await db.select<Expense[]>("SELECT * FROM financial_records WHERE id = $1", [expenseData.id]).then(res => res[0]);
+            }
+
+            if (expenseData.id) {
                  await db.execute(
-                   "UPDATE expenses SET date = $1, category = $2, amount = $3, store = $4, items = $5 WHERE id = $6",
-                   [expenseData.date, expenseData.category, expenseData.amount, expenseData.store, expenseData.items, expenseData.id]
+                   "UPDATE financial_records SET record_date = $1, amount = $2, quantity = $3, record_type = $4, description = $5, recipe_id = $6 WHERE id = $7",
+                   [expenseData.record_date, expenseData.amount, expenseData.quantity, expenseData.record_type, expenseData.description, expenseData.recipe_id, expenseData.id]
                  );
-            } else {
-                // Insert new expense
+                // Revert old inventory adjustment if recipe was changed or removed
+                if (oldExpenseData && oldExpenseData.recipe_id && oldExpenseData.record_type === 'Income') {
+                    if (oldExpenseData.recipe_id !== expenseData.recipe_id || expenseData.record_type !== 'Income') {
+                         await adjustInventoryForRecipe(oldExpenseData.recipe_id, oldExpenseData.quantity, 'increase');
+                    } else if (oldExpenseData.recipe_id === expenseData.recipe_id && oldExpenseData.quantity !== expenseData.quantity) {
+                        // Adjust for quantity change
+                        const quantityDifference = expenseData.quantity - oldExpenseData.quantity;
+                        if (quantityDifference !== 0) {
+                             await adjustInventoryForRecipe(expenseData.recipe_id, Math.abs(quantityDifference), quantityDifference > 0 ? 'decrease' : 'increase');
+                        }
+                    }
+                }
+            } else { // New expense
                 await db.execute(
-                    "INSERT INTO expenses (date, category, amount, store, items) VALUES ($1, $2, $3, $4, $5)",
-                    [expenseData.date, expenseData.category, expenseData.amount, expenseData.store, expenseData.items]
+                    "INSERT INTO financial_records (record_date, amount, quantity, record_type, description, recipe_id) VALUES ($1, $2, $3, $4, $5, $6)",
+                    [expenseData.record_date, expenseData.amount, expenseData.quantity, expenseData.record_type, expenseData.description, expenseData.recipe_id]
                 );
             }
-            await loadData(); // Refresh data
-            closeAddExpenseModal(); // Close modal on success
+
+            // Adjust inventory for new/updated income record with recipe
+            if (expenseData.record_type === 'Income' && expenseData.recipe_id) {
+                // If it's an update and recipe/quantity didn't change in a way that was already handled
+                if (!(oldExpenseData && oldExpenseData.recipe_id === expenseData.recipe_id && oldExpenseData.quantity === expenseData.quantity && oldExpenseData.record_type === 'Income')) {
+                    await adjustInventoryForRecipe(expenseData.recipe_id, expenseData.quantity, 'decrease');
+                }
+            }
+            
+            await loadData();
+            closeAddExpenseModal();
         } catch (err) {
-            console.error("Error saving expense:", err);
-            error = `Failed to save expense: ${err}`;
-            // isLoading = false; // loadData will set this
+            error = `ไม่สามารถบันทึกรายการได้: ${err}`;
         }
-        // loadData() handles isLoading = false
     }
 
-    // --- Edit and Delete Expense Functionality ---
     function editExpense(expense: Expense) {
         openAddExpenseModal(expense);
     }
@@ -172,25 +212,25 @@
             error = "Database not initialized.";
             return;
         }
-        if (!confirm(`Are you sure you want to delete expense ID ${id}? This action cannot be undone.`)) {
-            return;
-        }
         isLoading = true;
         error = null;
         try {
-            await db.execute("DELETE FROM expenses WHERE id = $1", [id]);
-            await loadData(); // Refresh data
+            const expenseToDelete = await db.select<Expense[]>("SELECT * FROM financial_records WHERE id = $1", [id]).then(res => res[0]);
+
+            await db.execute("DELETE FROM financial_records WHERE id = $1", [id]);
+
+            if (expenseToDelete && expenseToDelete.record_type === 'Income' && expenseToDelete.recipe_id) {
+                await adjustInventoryForRecipe(expenseToDelete.recipe_id, expenseToDelete.quantity, 'increase');
+            }
+
+            await loadData();
         } catch (err) {
-            console.error(`Error deleting expense with id: ${id}:`, err);
-            error = `Failed to delete expense: ${err}`;
-        } finally {
-            // isLoading = false; // loadData will set this
+            error = `ไม่สามารถลบรายการได้: ${err}`;
         }
     }
 
-    // --- Pagination ---
     let currentPage = 1;
-    const itemsPerPage = 10; // Or make this configurable
+    const itemsPerPage = 10;
     $: totalPages = Math.ceil(filteredExpenses.length / itemsPerPage);
     $: paginatedExpenses = filteredExpenses.slice(
       (currentPage - 1) * itemsPerPage,
@@ -207,12 +247,12 @@
 <div class="fade-in container mx-auto px-4 py-8 w-full min-h-screen p-0">
   <div class="max-w-7xl ms-auto mt-10">
     <div class="flex justify-between items-center mb-8">
-      <h1 class="text-3xl font-bold">Finance Analytics</h1>
-      <button class="btn btn-secondary" on:click={() => openAddExpenseModal()}>Add Expense</button>
+      <h1 class="text-3xl font-bold">การเงิน</h1>
+      <button class="btn btn-secondary" on:click={() => openAddExpenseModal()}>เพิ่มรายการ</button>
     </div>
 
     {#if isLoading}
-      <div class="text-center py-10">Loading finance data...</div>
+      <div class="text-center py-10">กำลังโหลดข้อมูลทางการเงิน...</div>
     {:else if error}
        <div class="alert alert-error shadow-lg mb-8">
          <div>
@@ -221,7 +261,6 @@
        </div>
     {/if}
 
-    <!-- Stats Overview -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
       {#each financeStats as stat}
         <div class="card bg-base-100 shadow-xl">
@@ -240,48 +279,27 @@
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-      <!-- Spending by Category Chart -->
+      <!-- Removed Category Spending Card as category field is gone -->
+      <!--
       <div class="card bg-base-100 shadow-xl col-span-2">
         <div class="card-body">
-          <h2 class="card-title">Spending by Category</h2>
-          <div class="h-64 mt-4 overflow-y-auto"> <!-- Added overflow -->
-            {#if categorySpending.length === 0}
-              <p class="text-center text-gray-500">No spending data available.</p>
-            {:else}
-              {@const maxAmount = Math.max(...categorySpending.map(c => c.amount), 1)} <!-- Avoid division by zero -->
-              <div class="space-y-2">
-                {#each categorySpending as item}
-                  <div class="flex items-center">
-                    <div class="w-24 truncate" title={item.category}>{item.category}</div> <!-- Added truncate -->
-                    <div class="flex-grow">
-                      <div class="h-6 bg-base-300 rounded-full overflow-hidden">
-                        <!-- Added transition -->
-                        <div
-                          class="h-full rounded-full bg-primary transition-all duration-500"
-                          style="width: {((item.amount / maxAmount) * 100)}%">
-                        </div>
-                      </div>
-                    </div>
-                    <div class="w-20 text-right">${item.amount.toFixed(2)}</div> <!-- Increased width -->
-                  </div>
-                {/each}
-              </div>
-            {/if}
+          <h2 class="card-title">การใช้จ่ายตามหมวดหมู่</h2>
+          <div class="h-64 mt-4 overflow-y-auto">
+            <p class="text-center text-gray-500">ข้อมูลหมวดหมู่ถูกนำออก</p>
           </div>
         </div>
       </div>
+      -->
 
-      <!-- Budget Overview (Example, needs real budget data) -->
-      <div class="card bg-base-100 shadow-xl">
+      <div class="card bg-base-100 shadow-xl lg:col-span-3"> <!-- Adjusted to span full width if category spending is removed -->
         <div class="card-body">
-          <h2 class="card-title">Budget Overview</h2>
-          {#if !isLoading && !error && financeStats.length > 0} <!-- Ensure data is loaded before calculating -->
-            {@const budget = 450} <!-- Example Budget -->
-            {@const spentStat = financeStats.find(s => s.title === "Spent This Month")}
-            {@const spent = spentStat && spentStat.value !== 'Error' ? parseFloat(spentStat.value.replace('$', '')) : 0}
+          <h2 class="card-title">ภาพรวมงบประมาณ</h2>
+          {#if !isLoading && !error && financeStats.length > 0}
+            {@const budget = 5000}
+            {@const spentStat = financeStats.find(s => s.title === "กำไรทั้งหมด")}
+            {@const spent = spentStat && spentStat.value !== 'Error' ? parseFloat(spentStat.value.replace(' บาท', '').replace(',', '')) : 0}
             {@const percentage = budget > 0 ? Math.min(Math.round((spent / budget) * 100), 100) : 0}
             <div class="flex flex-col items-center justify-center h-64">
-              <!-- Moved const declarations to be direct children of #if -->
                 <div class="relative w-40 h-40">
                   <div class="absolute inset-0 flex items-center justify-center">
                 <span class="text-2xl font-bold">{percentage}%</span>
@@ -289,73 +307,56 @@
               <svg viewBox="0 0 36 36" class="circular-chart">
                 <path class="circle-bg"
                   d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                   /> <!-- Corrected closing tag -->
+                   />
                 <path class="circle"
                   d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                   stroke-dasharray="{percentage}, 100" />
               </svg>
             </div>
             <div class="mt-4 text-center">
-              <p class="text-lg">${spent.toFixed(2)} of ${budget.toFixed(2)}</p>
-              <p class="text-sm opacity-75">Monthly budget usage</p>
+              <p class="text-lg">{spent} บาท จาก {budget} บาท</p>
+              <p class="text-sm opacity-75">การใช้งานงบประมาณเริ่มต้น</p>
             </div>
           </div>
           {:else}
-             <!-- Show loading or placeholder state for budget overview -->
              <div class="flex flex-col items-center justify-center h-64">
-               <p class="text-gray-500">Loading budget data...</p>
+               <p class="text-gray-500">กำลังโหลดข้อมูลงบประมาณ...</p>
              </div>
-          {/if} <!-- Close #if !isLoading -->
+          {/if}
         </div>
       </div>
-    </div> <!-- Close grid grid-cols-1 lg:grid-cols-3 -->
+    </div>
 
-    <!-- Filters and Search -->
     <div class="bg-base-100 shadow-xl rounded-lg p-4 mb-8">
       <div class="flex flex-col md:flex-row gap-4">
         <div class="form-control flex-grow">
           <div class="input-group">
             <input
               type="text"
-              placeholder="Search by category, store, date..."
+              placeholder="ค้นหาตามรายละเอียด, ประเภท, วันที่..."
               class="input input-bordered w-full"
               bind:value={searchQuery}
             />
           </div>
         </div>
 
-        <div class="form-control">
-          <select class="select select-bordered" bind:value={selectedCategory}>
-            {#each availableCategories as category}
-              <option value={category}>{category}</option>
-            {/each}
-          </select>
-        </div>
-
-        <div class="form-control">
-          <select class="select select-bordered" bind:value={selectedStore}>
-            {#each availableStores as store}
-              <option value={store}>{store}</option>
-            {/each}
-          </select>
-        </div>
+        <!-- Removed category and store select dropdowns -->
       </div>
     </div>
 
-    <!-- Expenses Table -->
     <div class="card bg-base-100 shadow-xl">
       <div class="card-body">
-        <h2 class="card-title mb-4">Recent Expenses</h2>
+        <h2 class="card-title mb-4">รายการล่าสุด</h2>
         <div class="overflow-x-auto">
           <table class="table table-zebra w-full">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Category</th>
-                <th>Store</th>
-                <th>Items</th>
-                <th>Amount</th>
-                <th>Actions</th>
+                <th>วันที่</th>
+                <th>ประเภท</th>
+                <th>รายละเอียด</th>
+                <th>จำนวน</th>
+                <th>จำนวนเงิน</th>
+                <th>การดำเนินการ</th>
               </tr>
             </thead>
             <tbody>
@@ -363,24 +364,24 @@
                 <tr>
                   <td colspan="6" class="text-center py-4">
                     {#if expenses.length === 0}
-                        No expenses recorded yet.
+                        ยังไม่มีรายการบันทึก
                     {:else}
-                        No expenses match your current filters.
+                        ไม่มีรายการที่ตรงกับการค้นหาปัจจุบัน
                     {/if}
                   </td>
                 </tr>
               {:else}
                 {#each paginatedExpenses as expense (expense.id)}
-                  <tr class="hover"> <!-- Added hover effect -->
-                    <td>{expense.date}</td>
-                    <td>{expense.category}</td>
-                    <td>{expense.store}</td>
-                    <td>{expense.items}</td>
-                    <td>${(expense.amount || 0).toFixed(2)}</td>
+                  <tr class="hover">
+                    <td>{expense.record_date}</td>
+                    <td>{expense.record_type}</td>
+                    <td>{expense.description}</td>
+                    <td>{expense.quantity}</td>
+                    <td>{(expense.amount || 0).toLocaleString()} บาท</td>
                     <td>
                       <div class="flex gap-2">
-                        <button class="btn btn-xs btn-ghost btn-info" on:click={() => editExpense(expense)}>Edit</button>
-                        <button class="btn btn-xs btn-error btn-ghost" on:click={() => deleteExpense(expense.id)}>Delete</button>
+                        <button class="btn btn-xs btn-ghost btn-info" on:click={() => editExpense(expense)}>แก้ไข</button>
+                        <button class="btn btn-xs btn-error btn-ghost" on:click={() => deleteExpense(expense.id)}>ลบ</button>
                       </div>
                     </td>
                   </tr>
@@ -390,9 +391,9 @@
             {#if filteredExpenses.length > 0}
             <tfoot>
               <tr>
-                <th colspan="3">Filtered Totals</th>
-                <th>{totalItems}</th>
-                <th>${totalSpent}</th>
+                <th colspan="3">ยอดรวมที่กรองแล้ว</th>
+                <th>{totalItemsFiltered}</th>
+                <th>{totalSpentFiltered} บาท</th>
                 <th></th>
               </tr>
             </tfoot>
@@ -402,12 +403,11 @@
       </div>
     </div>
 
-    <!-- Summary & Pagination -->
     <div class="flex flex-col md:flex-row justify-between items-center mt-4">
       <div class="text-sm mb-4 md:mb-0">
-         Showing {paginatedExpenses.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}
-          to {Math.min(currentPage * itemsPerPage, filteredExpenses.length)}
-          of {filteredExpenses.length} expenses (Total: {expenses.length})
+         แสดง {paginatedExpenses.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}
+          ถึง {Math.min(currentPage * itemsPerPage, filteredExpenses.length)}
+          จาก {filteredExpenses.length} รายการ (ทั้งหมด: {expenses.length})
       </div>
 
       {#if totalPages > 1}
@@ -419,7 +419,6 @@
             «
           </button>
           {#each Array(totalPages) as _, i}
-             <!-- Consider showing fewer page numbers for many pages -->
             <button
               class="join-item btn btn-sm {currentPage === i + 1 ? 'btn-active' : ''}"
               on:click={() => changePage(i + 1)}>
@@ -436,20 +435,18 @@
       {/if}
     </div>
 
-  </div> <!-- Close max-w-7xl -->
+  </div>
 
-  <!-- Add/Edit Expense Modal -->
   {#if showAddExpenseModal}
     <AddEditExpenseModal
       expense={expenseToEdit}
-      categories={availableCategories.filter(c => c !== 'All')}
-      stores={availableStores.filter(s => s !== 'All')}
+      {recipes}
       on:close={closeAddExpenseModal}
       on:save={handleSaveExpense}
     />
   {/if}
 
-</div> <!-- Close fade-in container -->
+</div>
 
 <style>
   .circular-chart {
@@ -459,12 +456,12 @@
   }
   .circle-bg {
     fill: none;
-    stroke: #eee; /* Background circle color */
+    stroke: #eee;
     stroke-width: 3.8;
   }
   .circle {
     fill: none;
-    stroke: #4338ca; /* Progress circle color - Indigo */
+    stroke: #4338ca;
     stroke-width: 2.8;
     stroke-linecap: round;
     animation: progress 1s ease-out forwards;
@@ -475,7 +472,4 @@
       stroke-dasharray: 0 100;
     }
   }
-
-  /* Add other styles as needed */
-
 </style>

@@ -3,30 +3,44 @@
   import Database from "@tauri-apps/plugin-sql";
   import "../../style.css";
   import AddRecipeModal from '../../components/AddRecipeModal.svelte';
+  import EditRecipeModal from '../../components/EditRecipeModal.svelte'; // Import EditRecipeModal
 
   interface Recipe {
     id: number;
     name: string;
-    ingredients_count: number;
+    description?: string;
+    ingredients_count: number; // This might become redundant or be calculated
+    ingredients: RecipeIngredient[]; // To store detailed ingredients
     selling_price: number;
     cost: number;
     profit: number;
     profit_margin: number;
-    image: Uint8Array; // <-- Changed type to handle blob data
+    image: Uint8Array;
+  }
+
+  interface RecipeIngredient {
+    item_id: number;
+    name: string;
+    quantity: number;
+    unit: string;
   }
 
   // Helper function to convert Uint8Array (Blob) to Base64 Data URL
   function blobToDataURL(blobData: Uint8Array | null | undefined): string {
     if (!blobData || blobData.length === 0) {
       // Return a placeholder or default image URL if blob is empty or null
-      return '/placeholder.png'; // Adjust path as needed
+      return '/cow.png'; // Adjust path as needed
     }
     try {
+      // Simple conversion assuming the blob is directly convertible
+      // Note: You might need a more robust conversion depending on the exact format
       const base64String = btoa(String.fromCharCode(...blobData));
+      // Assuming PNG format, adjust if needed (e.g., 'image/jpeg')
+      // You might need to store the image type in the database as well
       return `data:image/png;base64,${base64String}`; 
     } catch (e) {
       console.error("Error converting blob to Data URL:", e);
-      return '/placeholder.png'; 
+      return '/cow.png'; // Fallback on error
     }
   }
 
@@ -36,6 +50,8 @@
   let db: Database | null = null;
   let error: string | null = null;
   let showAddRecipeModal = false;
+  let showEditRecipeModal = false; // State for edit modal
+  let recipeToEdit: Recipe | null = null; // State for recipe being edited
 
   function openModal() {
     showAddRecipeModal = true;
@@ -43,6 +59,18 @@
 
   function closeModal() {
     showAddRecipeModal = false;
+    getRecipes(); // Refresh recipes when add modal closes
+  }
+
+  function openEditModal(recipe: Recipe) {
+    recipeToEdit = recipe;
+    showEditRecipeModal = true;
+  }
+
+  function closeEditModal() {
+    showEditRecipeModal = false;
+    recipeToEdit = null;
+    getRecipes(); // Refresh recipes when edit modal closes
   }
 
   async function deleteRecipe(id: number) {
@@ -69,9 +97,23 @@
       console.log("Database loaded successfully.");
 
       console.log("Executing query to fetch recipes...");
-      const result = await db.select<Recipe[]>("SELECT id, name, selling_price, image FROM recipes");
-      console.log("Query successful, fetched recipes:", result);
-      recipes = result;
+      const mainRecipes = await db.select<Recipe[]>("SELECT id, name, description, selling_price, image FROM recipes"); // Removed ingredients_count for now
+      console.log("Query successful, fetched main recipes:", mainRecipes);
+
+      const recipesWithIngredients: Recipe[] = [];
+      for (const recipe of mainRecipes) {
+        const ingredients = await db.select<RecipeIngredient[]>(
+          "SELECT ri.item_id, i.name, ri.quantity, ri.unit FROM recipe_ingredients ri JOIN items i ON ri.item_id = i.id WHERE ri.recipe_id = $1",
+          [recipe.id]
+        );
+        recipesWithIngredients.push({
+          ...recipe,
+          ingredients: ingredients,
+          ingredients_count: ingredients.length // Recalculate or use this
+        });
+      }
+      recipes = recipesWithIngredients;
+      console.log("Final recipes with ingredients:", recipes);
     } catch (e) {
       console.error("Error loading database or fetching recipes:", e);
       error = `Failed to load recipes: ${e}`;
@@ -127,8 +169,14 @@
             <!-- Call the conversion function -->
             <div class="p-4">
               <h2 class="text-xl font-bold mb-2">{recipe.name}</h2>
-              <!-- Updated field name -->
-              <p class="text-gray-600 mb-4">{recipe.ingredients_count} ingredients</p> 
+              <p class="text-gray-600 mb-1">({recipe.ingredients.length} ingredients)</p>
+              <div class="mb-3 max-h-24 overflow-y-auto text-sm">
+                <ul class="list-disc list-inside pl-2">
+                  {#each recipe.ingredients as ingredient}
+                    <li>{ingredient.name}: {ingredient.quantity} {ingredient.unit}</li>
+                  {/each}
+                </ul>
+              </div>
               
               <div class="flex justify-between items-center mb-4">
                 <div>
@@ -155,27 +203,27 @@
                 View Details
               </button>
               <div class="flex space-x-2">
-                <button class="text-blue-500 hover:text-blue-700">
+                <button class="text-blue-500 hover:text-blue-700" aria-label="Edit Recipe" on:click={() => openEditModal(recipe)}>
                   <i class="fas fa-edit"></i>
                 </button>
-                <button class="text-red-500 hover:text-red-700" on:click={() => deleteRecipe(recipe.id)}>
+                <button class="text-red-500 hover:text-red-700" aria-label="Delete Recipe" on:click={() => deleteRecipe(recipe.id)}>
                   <i class="fas fa-trash"></i>
                 </button>
-                <!-- Removed duplicated "View Details" text and button container -->
               </div>
-            </div> <!-- This closes the inner button container -->
-          </div> <!-- Close p-4 div -->
-        </div> <!-- Close recipe card div -->
+            </div>
+          </div>
+        </div>
       {/each}
-    </div> <!-- Close grid div -->
-  {/if} <!-- Close #if block -->
+    </div>
+  {/if}
   </div>
 
   {#if showAddRecipeModal}
-    <AddRecipeModal on:close={closeModal} on:recipesaved={() => {
-      closeModal();
-      getRecipes();
-    }} />
+    <AddRecipeModal on:close={closeModal} on:recipesaved={getRecipes} />
+  {/if}
+
+  {#if showEditRecipeModal && recipeToEdit}
+    <EditRecipeModal {recipeToEdit} on:close={closeEditModal} on:recipeedited={getRecipes} />
   {/if}
 </div>
 

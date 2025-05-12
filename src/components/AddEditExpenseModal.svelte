@@ -1,41 +1,76 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
 
-  // Define the type for the expense prop (optional, for editing)
-  type Expense = { id?: number; date: string; category: string; amount: number; store: string; items: number };
+  // Updated Expense type to match the new database structure
+  type Expense = {
+    id?: number;
+    record_date: string;
+    amount: number;
+    quantity: number;
+    record_type: 'Expense' | 'Income';
+    description: string;
+    recipe_id?: number;
+  };
   
   // Prop for existing expense data (if editing)
-  export let expense: Expense | null = null; 
-  // Props for available categories and stores
-  export let categories: string[] = [];
-  export let stores: string[] = [];
+  export let expense: Expense | null = null;
+  // Prop for recipes, now including selling_price
+  export let recipes: Array<{ id: number; name: string; selling_price: number }> = [];
+
+  // Categories and stores props are removed as these fields are no longer in the Expense type
 
   let formData: Expense = {
-    date: new Date().toISOString().split('T')[0], // Default to today
-    category: categories.length > 1 ? categories[1] : '', // Default to first actual category
+    record_date: new Date().toISOString().split('T')[0], // Default to today
     amount: 0,
-    store: stores.length > 1 ? stores[1] : '', // Default to first actual store
-    items: 1
+    quantity: 1,
+    record_type: 'Expense', // Default record_type
+    description: '',
+    recipe_id: undefined // Optional, so can be undefined
   };
   
   let isEditing = false;
-  let title = "Add New Expense";
+  let title = "เพิ่มรายการใหม่"; // "Add New Item"
+  let isAmountReadOnly = false;
+
+  // Reactive statements
+  $: if (formData.record_type === 'Expense') {
+    formData.recipe_id = undefined;
+    isAmountReadOnly = false; // Amount should be editable for expenses
+  }
+
+  $: if (formData.record_type === 'Income' && formData.recipe_id && recipes.length > 0) {
+    const selectedRecipe = recipes.find(r => r.id === formData.recipe_id);
+    if (selectedRecipe) {
+      formData.amount = selectedRecipe.selling_price * formData.quantity;
+      isAmountReadOnly = true;
+    } else {
+      isAmountReadOnly = false; // Recipe not found, allow manual input
+    }
+  } else if (formData.record_type === 'Income' && !formData.recipe_id) {
+    isAmountReadOnly = false; // No recipe selected for income, allow manual input
+  }
+
+  // Recalculate amount if quantity changes for an income item with a recipe
+  $: if (formData.record_type === 'Income' && formData.recipe_id && formData.quantity > 0 && recipes.length > 0) {
+    const selectedRecipe = recipes.find(r => r.id === formData.recipe_id);
+    if (selectedRecipe) {
+      formData.amount = selectedRecipe.selling_price * formData.quantity;
+    }
+  }
+
 
   onMount(() => {
     if (expense) {
       isEditing = true;
-      title = `Edit Expense (ID: ${expense.id})`;
-      // Ensure amount is a number, handle potential null/undefined from prop
-      formData = { ...expense, amount: Number(expense.amount) || 0 }; 
-    } else {
-       // Ensure default category/store exists if lists are provided
-       if (!categories.includes(formData.category) && categories.length > 1) {
-           formData.category = categories[1];
-       }
-       if (!stores.includes(formData.store) && stores.length > 1) {
-           formData.store = stores[1];
-       }
+      title = `แก้ไขรายการ (${expense.description})`; // "Edit Item (ID: ...)"
+      // Ensure amount and quantity are numbers
+      formData = { 
+        ...expense, 
+        amount: Number(expense.amount) || 0,
+        quantity: Number(expense.quantity) || 1 
+      }; 
     }
+    // Removed default category/store logic
   });
 
   const dispatch = createEventDispatcher();
@@ -45,14 +80,13 @@
   }
 
   function handleSubmit() {
-    // Basic validation (can be expanded)
-    if (!formData.date || !formData.category || !formData.store || formData.amount <= 0 || formData.items <= 0) {
-      alert('Please fill in all fields correctly.');
+    // Updated validation
+    if (!formData.record_date || !formData.description || formData.amount <= 0 || formData.quantity <= 0) {
+      alert('กรุณากรอกข้อมูลให้ครบถ้วนและถูกต้อง'); 
       return;
     }
-    console.log("Submitting form data:", formData); // Debug log
-    dispatch('save', formData); // Dispatch 'save' event with the form data
-    // closeModal(); // Optionally close modal after save, or let parent handle it
+    console.log("Submitting form data:", formData); // Debug 
+    dispatch('save', formData); 
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -76,55 +110,63 @@
     <form on:submit|preventDefault={handleSubmit}>
       <div class="space-y-4">
         <div class="form-control">
-          <label class="label" for="expense-date">
-            <span class="label-text">Date</span>
+          <label class="label" for="expense-record-date">
+            <span class="label-text">วันที่</span>
           </label>
-          <input type="date" id="expense-date" class="input input-bordered w-full" bind:value={formData.date} required />
+          <input type="date" id="expense-record-date" class="input input-bordered w-full" bind:value={formData.record_date} required />
         </div>
 
         <div class="form-control">
-          <label class="label" for="expense-category">
-            <span class="label-text">Category</span>
+          <label class="label" for="expense-description">
+            <span class="label-text">รายละเอียด</span>
           </label>
-          <select id="expense-category" class="select select-bordered w-full" bind:value={formData.category} required>
-            {#each categories.filter(c => c !== 'All') as category (category)}
-              <option value={category}>{category}</option>
-            {/each}
+          <textarea id="expense-description" class="textarea textarea-bordered w-full" bind:value={formData.description} required rows="3"></textarea>
+        </div>
+        
+        <div class="form-control">
+          <label class="label" for="expense-record-type">
+            <span class="label-text">ประเภทรายการ</span>
+          </label>
+          <select id="expense-record-type" class="select select-bordered w-full" bind:value={formData.record_type} required>
+            <option value="Expense">รายจ่าย</option>
+            <option value="Income">รายรับ</option>
           </select>
         </div>
 
-        <div class="form-control">
-          <label class="label" for="expense-store">
-            <span class="label-text">Store</span>
-          </label>
-           <select id="expense-store" class="select select-bordered w-full" bind:value={formData.store} required>
-             {#each stores.filter(s => s !== 'All') as store (store)}
-               <option value={store}>{store}</option>
-             {/each}
-           </select>
-        </div>
-        
         <div class="grid grid-cols-2 gap-4">
           <div class="form-control">
             <label class="label" for="expense-amount">
-              <span class="label-text">Amount ($)</span>
+              <span class="label-text">จำนวนเงิน (บาท)</span>
             </label>
-            <input type="number" id="expense-amount" step="0.01" min="0.01" class="input input-bordered w-full" bind:value={formData.amount} required />
+            <input type="number" id="expense-amount" step="0.01" min="0.01" class="input input-bordered w-full" bind:value={formData.amount} required readonly={isAmountReadOnly} />
           </div>
 
           <div class="form-control">
-            <label class="label" for="expense-items">
-              <span class="label-text">Items</span>
+            <label class="label" for="expense-quantity">
+              <span class="label-text">จำนวน</span>
             </label>
-            <input type="number" id="expense-items" step="1" min="1" class="input input-bordered w-full" bind:value={formData.items} required />
+            <input type="number" id="expense-quantity" step="1" min="1" class="input input-bordered w-full" bind:value={formData.quantity} required />
           </div>
         </div>
 
+        {#if formData.record_type === 'Income'}
+        <div class="form-control">
+          <label class="label" for="expense-recipe-id">
+            <span class="label-text">สูตรอาหาร (ถ้ามี)</span>
+          </label>
+          <select id="expense-recipe-id" class="select select-bordered w-full" bind:value={formData.recipe_id}>
+            <option value={undefined}>เลือกสูตรอาหาร (ถ้ามี)</option>
+            {#each recipes as recipe}
+              <option value={recipe.id}>{recipe.name}</option>
+            {/each}
+          </select>
+        </div>
+        {/if}
       </div>
       
       <div class="modal-action mt-6">
-        <button type="button" class="btn btn-ghost" on:click={closeModal}>Cancel</button>
-        <button type="submit" class="btn btn-primary">{isEditing ? 'Save Changes' : 'Add Expense'}</button>
+        <button type="button" class="btn btn-ghost" on:click={closeModal}>ยกเลิก</button>
+        <button type="submit" class="btn btn-primary">{isEditing ? 'บันทึกการเปลี่ยนแปลง' : 'เพิ่มรายการ'}</button>
       </div>
     </form>
   </div>

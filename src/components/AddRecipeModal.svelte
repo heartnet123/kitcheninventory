@@ -1,7 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
-  import Database from "@tauri-apps/plugin-sql";
-  import { open } from '@tauri-apps/plugin-dialog';
+  import Database from "@tauri-apps/plugin-sql"
 
   interface InventoryItem {
     id: number;
@@ -21,6 +20,8 @@
   let recipeName = '';
   let description = ''; // Changed from instructions to match DB column 'description'
   let sellingPrice: number | null = null; // Added state for selling price
+  let recipeImageFile: File | null = null; // To store the selected image file
+  let recipeImagePreview: string | null = null; // To store the image preview URL
 
   onMount(async () => {
     try {
@@ -65,19 +66,28 @@
       return;
     }
 
+    let imageData: Uint8Array | null = null;
+    if (recipeImageFile) {
+      const arrayBuffer = await recipeImageFile.arrayBuffer();
+      imageData = new Uint8Array(arrayBuffer);
+    }
+
     console.log('Submitting recipe:', {
       name: recipeName,
       description: description, // Use description here
       selling_price: sellingPrice,
+      image_present: !!recipeImageFile, // Log if an image is present
+      image_data_length: imageData ? imageData.length : 0, // Shows size of byte array if imageData is not null
       ingredients: selectedIngredients
     });
-
+    console.log('Image data:', imageData); // ต้องเป็น Uint8Array ที่มีข้อมูล
     try {
       // --- Database Insertion Logic ---
-      // 1. Insert into recipes table - Added selling_price
+      // 1. Insert into recipes table - Added selling_price and image
+      // IMPORTANT: Ensure your 'recipes' table has an 'image' column (e.g., BLOB type)
       const recipeInsertResult = await db.execute(
-        "INSERT INTO recipes (name, description, selling_price) VALUES ($1, $2, $3)", // Added selling_price
-        [recipeName, description, sellingPrice] // Use description and sellingPrice
+        "INSERT INTO recipes (name, description, selling_price, image) VALUES ($1, $2, $3, $4)",
+        [recipeName, description, sellingPrice, imageData]
       );
 
       if (recipeInsertResult.lastInsertId) {
@@ -129,7 +139,7 @@
       </div>
 
       <div>
-        <label class="block text-sm font-medium mb-1">เลือกส่วนผสม:</label>
+        <label for="ingredient-select" class="block text-sm font-medium mb-1">เลือกส่วนผสม:</label>
         {#if inventoryItems.length > 0}
           <div class="max-h-40 overflow-y-auto border rounded p-2 mb-2 bg-base-200">
             {#each inventoryItems as item (item.id)}
@@ -150,7 +160,7 @@
 
       {#if selectedIngredients.length > 0}
         <div>
-          <label class="block text-sm font-medium mb-1">ปริมาณส่วนผสมที่เลือก:</label>
+          <label for="quantity-input" class="block text-sm font-medium mb-1">ปริมาณส่วนผสมที่เลือก:</label>
           <div class="space-y-2">
             {#each selectedIngredients as ingredient (ingredient.id)}
               <div class="flex items-center gap-2 p-2 border rounded bg-base-200">
@@ -179,7 +189,30 @@
         <textarea id="description" bind:value={description} rows="4" class="textarea textarea-bordered w-full"></textarea>
       </div>
 
-       <!-- Optional: Add Image Upload -->
+      <div>
+        <label for="recipeImage" class="block text-sm font-medium mb-1">รูปภาพสูตรอาหาร (ถ้ามี):</label>
+        <input
+          type="file"
+          id="recipeImage"
+          class="file-input file-input-bordered w-full"
+          accept="image/*"
+          on:change={(e) => {
+            const files = (e.target as HTMLInputElement).files;
+            if (files && files.length > 0) {
+              recipeImageFile = files[0];
+              recipeImagePreview = URL.createObjectURL(recipeImageFile); // Create a preview URL
+            } else {
+              recipeImageFile = null;
+              recipeImagePreview = null;
+            }
+          }}
+        />
+        {#if recipeImagePreview}
+          <div class="mt-2">
+            <img src={recipeImagePreview} alt="Recipe preview" class="max-h-40 rounded border" />
+          </div>
+        {/if}
+      </div>
 
       <div class="flex justify-end gap-2 pt-4">
         <button type="button" class="btn btn-ghost" on:click={closeModal}>ยกเลิก</button>
