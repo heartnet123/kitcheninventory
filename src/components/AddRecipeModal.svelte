@@ -6,10 +6,12 @@
     id: number;
     name: string;
     unit: string;
+    cost_per_unit?: number;
   }
 
   interface SelectedIngredient extends InventoryItem {
     quantity: number;
+    cost_per_unit: number;
   }
 
   const dispatch = createEventDispatcher();
@@ -22,11 +24,17 @@
   let sellingPrice: number | null = null; // Added state for selling price
   let recipeImageFile: File | null = null; // To store the selected image file
   let recipeImagePreview: string | null = null; // To store the image preview URL
+  
+  // Profit calculation variables
+  let recipeCost: number = 0;
+  let profit: number = 0;
+  let profitMargin: number = 0;
+  let isProfit: boolean = false;
 
   onMount(async () => {
     try {
       db = await Database.load("sqlite:inventory.db");
-      const items = await db.select<InventoryItem[]>("SELECT id, name, unit FROM items ORDER BY name ASC");
+      const items = await db.select<InventoryItem[]>("SELECT id, name, unit, cost_per_unit FROM items ORDER BY name ASC");
       inventoryItems = items;
     } catch (e) {
       console.error("Error loading DB or fetching items:", e);
@@ -36,12 +44,35 @@
 
   function addIngredient(item: InventoryItem) {
     if (!selectedIngredients.some(ing => ing.id === item.id)) {
-      selectedIngredients = [...selectedIngredients, { ...item, quantity: 1 }]; // Default quantity to 1
+      selectedIngredients = [...selectedIngredients, {
+        ...item,
+        quantity: 1,
+        cost_per_unit: item.cost_per_unit || 0
+      }]; // Default quantity to 1
     }
   }
 
   function removeIngredient(itemId: number) {
     selectedIngredients = selectedIngredients.filter(ing => ing.id !== itemId);
+  }
+
+  // Reactive calculations for profit
+  $: {
+    recipeCost = selectedIngredients.reduce((total, ingredient) => {
+      return total + (ingredient.quantity * ingredient.cost_per_unit);
+    }, 0);
+  }
+
+  $: {
+    if (sellingPrice !== null && sellingPrice > 0) {
+      profit = sellingPrice - recipeCost;
+      profitMargin = (profit / sellingPrice) * 100;
+      isProfit = profit > 0;
+    } else {
+      profit = 0;
+      profitMargin = 0;
+      isProfit = false;
+    }
   }
 
   function closeModal() {
@@ -83,11 +114,10 @@
     console.log('Image data:', imageData); // ต้องเป็น Uint8Array ที่มีข้อมูล
     try {
       // --- Database Insertion Logic ---
-      // 1. Insert into recipes table - Added selling_price and image
-      // IMPORTANT: Ensure your 'recipes' table has an 'image' column (e.g., BLOB type)
+      // 1. Insert into recipes table - Added selling_price, recipe_cost, profit, profit_margin and image
       const recipeInsertResult = await db.execute(
-        "INSERT INTO recipes (name, description, selling_price, image) VALUES ($1, $2, $3, $4)",
-        [recipeName, description, sellingPrice, imageData]
+        "INSERT INTO recipes (name, description, selling_price, recipe_cost, profit, profit_margin, image) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        [recipeName, description, sellingPrice, recipeCost, profit, profitMargin, imageData]
       );
 
       if (recipeInsertResult.lastInsertId) {
@@ -183,6 +213,64 @@
         </div>
       {/if}
 
+      <!-- Cost and Profit Calculation Section -->
+      {#if selectedIngredients.length > 0}
+        <div class="bg-base-200 p-4 rounded-lg space-y-3">
+          <h3 class="text-lg font-semibold">การคำนวณต้นทุนและกำไร</h3>
+          
+          <!-- Cost Breakdown -->
+          <div class="space-y-2">
+            <h4 class="text-sm font-medium text-gray-600">รายละเอียดต้นทุน:</h4>
+            {#each selectedIngredients as ingredient (ingredient.id)}
+              <div class="flex justify-between text-sm bg-white p-2 rounded">
+                <span>{ingredient.name} ({ingredient.quantity} {ingredient.unit})</span>
+                <span>{(ingredient.quantity * ingredient.cost_per_unit).toFixed(2)} บาท</span>
+              </div>
+            {/each}
+          </div>
+
+          <!-- Total Cost -->
+          <div class="flex justify-between font-semibold border-t pt-2">
+            <span>รวมต้นทุนทั้งหมด:</span>
+            <span>{recipeCost.toFixed(2)} บาท</span>
+          </div>
+
+          <!-- Profit Calculation -->
+          {#if sellingPrice !== null && sellingPrice > 0}
+            <div class="space-y-2 border-t pt-3">
+              <div class="flex justify-between">
+                <span>ราคาขาย:</span>
+                <span>{sellingPrice.toFixed(2)} บาท</span>
+              </div>
+              <div class="flex justify-between">
+                <span>ต้นทุน:</span>
+                <span>{recipeCost.toFixed(2)} บาท</span>
+              </div>
+              <div class="flex justify-between font-semibold {isProfit ? 'text-green-600' : profit === 0 ? 'text-yellow-600' : 'text-red-600'}">
+                <span>กำไร:</span>
+                <span>{profit.toFixed(2)} บาท ({profitMargin.toFixed(1)}%)</span>
+              </div>
+              
+              <!-- Profit Status Indicator -->
+              <div class="text-center mt-2">
+                {#if isProfit}
+                  <div class="badge badge-success gap-2">
+                    🟢 มีกำไร
+                  </div>
+                {:else if profit === 0}
+                  <div class="badge badge-warning gap-2">
+                    🟡 คุ้มทุน
+                  </div>
+                {:else}
+                  <div class="badge badge-error gap-2">
+                    🔴 ขาดทุน
+                  </div>
+                {/if}
+              </div>
+            </div>
+          {/if}
+        </div>
+      {/if}
 
       <div>
         <label for="description" class="block text-sm font-medium mb-1">คำอธิบาย/ขั้นตอนการทำ:</label>

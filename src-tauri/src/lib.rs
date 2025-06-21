@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS items (
   category VARCHAR,
   quantity REAL,
   unit VARCHAR,
+  cost REAL,
   cost_per_unit REAL,
   expiration_date DATE,
   location VARCHAR
@@ -36,7 +37,10 @@ CREATE TABLE IF NOT EXISTS recipes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name VARCHAR,
   description TEXT,
+  recipe_cost REAL,
   selling_price REAL,
+  profit REAL,
+  profit_margin REAL,
   image BLOB -- เพิ่มคอลัมน์สำหรับเก็บรูปภาพ
 );
 
@@ -48,24 +52,6 @@ CREATE TABLE IF NOT EXISTS recipe_ingredients (
   unit VARCHAR,
   FOREIGN KEY(recipe_id) REFERENCES recipes(id),
   FOREIGN KEY(item_id) REFERENCES items(id)
-);
-
-CREATE TABLE IF NOT EXISTS orders (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  order_date DATETIME,
-  total_amount REAL,
-  customer_info VARCHAR,
-  notes TEXT
-);
-
-CREATE TABLE IF NOT EXISTS order_items (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  order_id INTEGER,
-  recipe_id INTEGER,
-  quantity INTEGER,
-  price REAL,
-  FOREIGN KEY(order_id) REFERENCES orders(id),
-  FOREIGN KEY(recipe_id) REFERENCES recipes(id)
 );
 
 CREATE TABLE IF NOT EXISTS financial_records (

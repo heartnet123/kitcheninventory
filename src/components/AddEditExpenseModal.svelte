@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from 'svelte';
+  import { getTodayDate } from '../lib/utils';
 
   // Updated Expense type to match the new database structure
   type Expense = {
@@ -17,10 +18,9 @@
   // Prop for recipes, now including selling_price
   export let recipes: Array<{ id: number; name: string; selling_price: number }> = [];
 
-  // Categories and stores props are removed as these fields are no longer in the Expense type
 
   let formData: Expense = {
-    record_date: new Date().toISOString().split('T')[0], // Default to today
+    record_date: getTodayDate(), // Default to today
     amount: 0,
     quantity: 1,
     record_type: 'Expense', // Default record_type
@@ -29,7 +29,7 @@
   };
   
   let isEditing = false;
-  let title = "เพิ่มรายการใหม่"; // "Add New Item"
+  let title = "เพิ่มรายการใหม่";
   let isAmountReadOnly = false;
 
   // Reactive statements
@@ -152,10 +152,10 @@
         {#if formData.record_type === 'Income'}
         <div class="form-control">
           <label class="label" for="expense-recipe-id">
-            <span class="label-text">สูตรอาหาร (ถ้ามี)</span>
+            <span class="label-text">สูตรอาหาร</span>
           </label>
           <select id="expense-recipe-id" class="select select-bordered w-full" bind:value={formData.recipe_id}>
-            <option value={undefined}>เลือกสูตรอาหาร (ถ้ามี)</option>
+            <option value={undefined}>เลือกสูตรอาหาร</option>
             {#each recipes as recipe}
               <option value={recipe.id}>{recipe.name}</option>
             {/each}

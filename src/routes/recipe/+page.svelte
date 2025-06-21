@@ -12,7 +12,7 @@
     ingredients_count: number; // This might become redundant or be calculated
     ingredients: RecipeIngredient[]; // To store detailed ingredients
     selling_price: number;
-    cost: number;
+    recipe_cost: number;
     profit: number;
     profit_margin: number;
     image: Uint8Array;
@@ -74,21 +74,26 @@
   }
 
   async function deleteRecipe(id: number) {
-    if (!db) {
-      error = "Database not initialized.";
-      return;
-    }
-    try {
-      console.log(`Attempting to delete recipe with id: ${id}`);
-      await db.execute("DELETE FROM recipes WHERE id = $1", [id]);
-      console.log(`Recipe with id: ${id} deleted successfully.`);
-      // Remove the recipe from the local array to update the UI
-      recipes = recipes.filter(recipe => recipe.id !== id);
-    } catch (e) {
-      console.error(`Error deleting recipe with id: ${id}:`, e);
-      error = `Failed to delete recipe: ${e}`;
-    }
+  if (!db) {
+    error = "Database not initialized.";
+    return;
   }
+  try {
+    console.log(`Attempting to delete recipe with id: ${id}`);
+    
+    await db.execute("DELETE FROM recipe_ingredients WHERE recipe_id = $1", [id]);
+    
+    await db.execute("DELETE FROM financial_records WHERE recipe_id = $1", [id]);
+    
+    await db.execute("DELETE FROM recipes WHERE id = $1", [id]);
+    
+    console.log(`Recipe with id: ${id} deleted successfully.`);
+    recipes = recipes.filter(recipe => recipe.id !== id);
+  } catch (e) {
+    console.error(`Error deleting recipe with id: ${id}:`, e);
+    error = `Failed to delete recipe: ${e}`;
+  }
+}
 
   async function getRecipes() {
     try {
@@ -97,7 +102,7 @@
       console.log("Database loaded successfully.");
 
       console.log("Executing query to fetch recipes...");
-      const mainRecipes = await db.select<Recipe[]>("SELECT id, name, description, selling_price, image FROM recipes"); // Removed ingredients_count for now
+      const mainRecipes = await db.select<Recipe[]>("SELECT id, name, description, selling_price, recipe_cost, profit, profit_margin, image FROM recipes");
       console.log("Query successful, fetched main recipes:", mainRecipes);
 
       const recipesWithIngredients: Recipe[] = [];
@@ -120,6 +125,20 @@
     }
   }
 
+  async function deleteIngredient(recipeId: number, itemId: number) {
+    if (!db) {
+      error = "Database not initialized.";
+      return;
+    }
+    try {
+      await db.execute("DELETE FROM recipe_ingredients WHERE recipe_id = $1 AND item_id = $2", [recipeId, itemId]);
+      // Refresh the recipes after deleting an ingredient
+      getRecipes();
+    } catch (e) {
+      console.error(`Error deleting ingredient with item_id: ${itemId} from recipe_id: ${recipeId}:`, e);
+      error = `Failed to delete ingredient: ${e}`;
+    }
+  }
 
   onMount(() => {
     getRecipes();
@@ -171,28 +190,35 @@
               <h2 class="text-xl font-bold mb-2">{recipe.name}</h2>
               <p class="text-gray-600 mb-1">({recipe.ingredients.length} ingredients)</p>
               <div class="mb-3 max-h-24 overflow-y-auto text-sm">
-                <ul class="list-disc list-inside pl-2">
-                  {#each recipe.ingredients as ingredient}
-                    <li>{ingredient.name}: {ingredient.quantity} {ingredient.unit}</li>
-                  {/each}
-                </ul>
-              </div>
+  <ul class="list-disc list-inside pl-2">
+    {#each recipe.ingredients as ingredient}
+      <li class="flex justify-between items-center py-1">
+        <span>{ingredient.name}: {ingredient.quantity} {ingredient.unit}</span>
+        <button 
+          class="btn btn-xs btn-ghost btn-error ml-2"
+          on:click|stopPropagation={() => deleteIngredient(recipe.id, ingredient.item_id)}
+          title="Remove ingredient"
+        >
+          ✕
+        </button>
+      </li>
+    {/each}
+  </ul>
+</div>
               
               <div class="flex justify-between items-center mb-4">
                 <div>
                   <p class="text-gray-600">Selling Price</p>
-                  <!-- Updated field name -->
-                  <p class="text-lg font-semibold">{recipe.selling_price} บาท</p> 
+                  <p class="text-lg font-semibold">{(recipe.selling_price || 0).toFixed(2)} บาท</p>
                 </div>
                 <div>
                   <p class="text-gray-600">Cost</p>
-                  <p class="text-lg font-semibold">{recipe.cost} บาท</p>
+                  <p class="text-lg font-semibold">{(recipe.recipe_cost || 0).toFixed(2)} บาท</p>
                 </div>
                 <div>
                   <p class="text-gray-600">Profit</p>
-                  <p class="text-lg font-semibold text-green-500">
-                    <!-- Updated field names -->
-                    {recipe.profit} บาท ({recipe.profit_margin}%)
+                  <p class="text-lg font-semibold {(recipe.profit || 0) > 0 ? 'text-green-500' : (recipe.profit || 0) === 0 ? 'text-yellow-500' : 'text-red-500'}">
+                    {(recipe.profit || 0).toFixed(2)} บาท ({(recipe.profit_margin || 0).toFixed(1)}%)
                   </p>
                 </div>
               </div>

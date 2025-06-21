@@ -4,7 +4,7 @@
     { link: "/inventory", label: "Inventory", icon: "📦" },
     { link: "/recipe", label: "Recipe", icon: "📜" },
     { link: "/finance", label: "Finance", icon: "📈" },
-    // { link: "/test", label: "test", icon: "📜" }
+    // { link: "/test", label: "Test Image", icon: "🧪" }
   ];
 
   import { page } from '$app/stores';

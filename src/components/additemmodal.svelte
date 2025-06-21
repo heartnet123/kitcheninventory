@@ -2,11 +2,24 @@
   import { createEventDispatcher } from 'svelte';
   export let showModal: boolean = false;
   let itemName = "";
-  let itemQuantity = "";
+  let itemQuantity: string = ""; // Ensure type for parsing
   let itemUnit = "";
   let itemCategory = ""; // Variable to hold the selected category
+  let itemCost: string = ""; // Ensure type for parsing
   const categories = ["Dairy", "Bakery", "Fruit", "Vegetables", "Meat", "Grains", "Dry product", "Other"]; // Define categories
   const dispatch = createEventDispatcher();
+
+  let itemCostPerUnit: number | string = ""; // Will be calculated
+
+  $: {
+    const costVal = parseFloat(itemCost);
+    const quantityVal = parseFloat(itemQuantity);
+    if (!isNaN(costVal) && !isNaN(quantityVal) && quantityVal > 0) {
+      itemCostPerUnit = costVal / quantityVal;
+    } else {
+      itemCostPerUnit = ""; // Or some placeholder like 'N/A' or 0
+    }
+  }
 
   function closeModal() {
     dispatch('close');
@@ -14,11 +27,19 @@
     itemQuantity = "";
     itemUnit = "";
     itemCategory = ""; // Reset item category
+    itemCost = "";
+    itemCostPerUnit = "";
   }
 
   function submitItem() {
-    // Dispatch category along with other item details
-    dispatch('save', { name: itemName, quantity: itemQuantity, unit: itemUnit, category: itemCategory });
+    const costVal = parseFloat(itemCost);
+    const quantityVal = parseFloat(itemQuantity);
+    let costPerUnitVal = 0;
+    if (!isNaN(costVal) && !isNaN(quantityVal) && quantityVal > 0) {
+      costPerUnitVal = costVal / quantityVal;
+    }
+    // Dispatch category, cost, and calculated costperunit along with other item details
+    dispatch('save', { name: itemName, quantity: quantityVal, unit: itemUnit, category: itemCategory, cost: costVal, costperunit: costPerUnitVal });
     closeModal();
   }
 </script>
@@ -49,12 +70,13 @@
               จำนวน :
             </label>
             <input
-              type="text"
               id="itemQuantity"
               class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
               bind:value={itemQuantity}
               placeholder="0"
               required
+              type="number"
+              step="any"
             />
           </div>
 
@@ -89,6 +111,34 @@
             </select>
           </div>
 
+          <div class="mb-4">
+            <label for="itemCost" class="block text-gray-700 text-sm font-bold mb-2">
+              ราคา :
+            </label>
+            <input
+              type="number"
+              id="itemCost"
+              class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+              bind:value={itemCost}
+              placeholder="0.00"
+              required
+              step="0.01"
+            />
+          </div>
+
+          <div class="mb-4">
+            <label for="itemCostPerUnit" class="block text-gray-700 text-sm font-bold mb-2">
+              ราคาต่อหน่วย (คำนวณอัตโนมัติ) :
+            </label>
+            <input
+              type="text" 
+              id="itemCostPerUnit"
+              class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline bg-gray-100"
+              bind:value={itemCostPerUnit}
+              readonly 
+            />
+          </div>
+
         </div>
         <div class="modal-action">
           <button type="button" class="btn" on:click={closeModal}>Close</button>
@@ -100,5 +150,5 @@
 {/if}
 
 <style>
-  /* สามารถปรับแต่งสไตล์เพิ่มเติมได้ตามต้องการ */
+
 </style>

@@ -2,6 +2,7 @@
     import { onMount } from 'svelte';
     import Database from '@tauri-apps/plugin-sql';
     import AddEditExpenseModal from '../../components/AddEditExpenseModal.svelte';
+    import { formatDate } from '../../lib/utils';
 
     interface Expense {
       id: number;
@@ -15,7 +16,6 @@
 
     let financeStats: { title: string; value: string; desc: string; icon: string }[] = [];
     let expenses: Expense[] = [];
-    // let categorySpending: { category: string; amount: number }[] = []; // Category removed
     let db: Database | null = null;
     let error: string | null = null;
     let isLoading = true;
@@ -26,7 +26,6 @@
       error = null;
       try {
         db = await Database.load("sqlite:inventory.db");
-        // Updated SELECT query to include description and recipe_id
         const fetchedExpenses = await db.select<Expense[]>("SELECT id, record_date, amount, quantity, record_type, description, recipe_id FROM financial_records ORDER BY record_date DESC");
         expenses = fetchedExpenses;
 
@@ -34,18 +33,15 @@
         recipes = fetchedRecipes;
 
         financeStats = calculateFinanceStats(expenses);
-        // categorySpending = calculateCategorySpending(expenses); // Category removed
-
       } catch (err) {
         error = `ไม่สามารถโหลดข้อมูลทางการเงินและสูตรอาหารได้: ${err}`;
         expenses = [];
         financeStats = [
-          { title: "งบประมาณรายเดือน", value: "Error", desc: "N/A", icon: "💵" },
-          { title: "กำไรทั้งหมด", value: "Error", desc: "N/A", icon: "📊" },
+          { title: "งบเริ่มต้น", value: "Error", desc: "N/A", icon: "💵" },
+          { title: "ค่าใช้จ่ายทั้งหมด", value: "Error", desc: "N/A", icon: "📊" },
           { title: "เงินออม", value: "Error", desc: "N/A", icon: "💰" },
           { title: "ค่าอาหารเฉลี่ยต่อมื้อ", value: "Error", desc: "N/A", icon: "🍽️" },
         ];
-        // categorySpending = []; // Category removed
       } finally {
         isLoading = false;
       }
@@ -56,7 +52,7 @@
         if (!data || data.length === 0) {
              return [
                 { title: "งบประมาณ", value: `${monthlyBudget} บาท`, desc: "", icon: "💵" },
-                { title: "กำไรทั้งหมด", value: "0 บาท", desc: "0% ของงบประมาณ", icon: "📊" },
+                { title: "ค่าใช้จ่ายทั้งหมด", value: "0 บาท", desc: "0% ของงบประมาณ", icon: "📊" },
                 { title: "เงินออม", value: `${monthlyBudget} บาท`, desc: "100% คงเหลือ", icon: "💰" },
                 { title: "ค่าอาหารเฉลี่ยต่อมื้อ", value: "0 บาท", desc: "จากค่าใช้จ่าย", icon: "🍽️" },
             ];
@@ -66,50 +62,30 @@
         .filter(expense => expense.record_type === 'Expense')
         .reduce((sum, expense) => sum + expense.amount, 0);
       const savings = monthlyBudget - totalSpent;
-      const expenseQuantityCount = data // Changed from expenseItemsCount
+      const expenseQuantityCount = data 
         .filter(expense => expense.record_type === 'Expense')
-        .reduce((sum, exp) => sum + (exp.quantity || 0), 0); // Changed from exp.items
+        .reduce((sum, exp) => sum + (exp.quantity || 0), 0);
       const avgCostPerMeal = expenseQuantityCount > 0 ? (totalSpent / expenseQuantityCount) : 0;
 
       return [
-          { title: "งบประมาณรายเดือน", value: `${monthlyBudget} บาท`, desc: "สำหรับเดือนปัจจุบัน", icon: "💵" },
-          { title: "กำไรทั้งหมด", value: `${totalSpent} บาท`, desc: `${monthlyBudget > 0 ? ((totalSpent / monthlyBudget) * 100).toFixed(0) : 0}% ของงบประมาณ`, icon: "📊" },
+          { title: "งบประมาณเริ่มต้น", value: `${monthlyBudget} บาท`, desc: "", icon: "💵" },
+          { title: "ค่าใช้จ่ายทั้งหมด", value: `${totalSpent} บาท`, desc: `${monthlyBudget > 0 ? ((totalSpent / monthlyBudget) * 100).toFixed(0) : 0}% ของงบประมาณ`, icon: "📊" },
           { title: "เงินออม", value: `${savings} บาท`, desc: `${monthlyBudget > 0 ? ((savings / monthlyBudget) * 100).toFixed(0) : 0}% คงเหลือ`, icon: "💰" },
           { title: "ค่าอาหารเฉลี่ยต่อมื้อ", value: `${avgCostPerMeal} บาท`, desc: "จากค่าใช้จ่าย", icon: "🍽️" },
         ];
     }
 
-    // function calculateCategorySpending(data: Expense[]) { // Removed as category is no longer a field
-    //   const spendingMap = new Map<string, number>();
-    //   data.filter(expense => expense.record_type === 'Expense').forEach(expense => {
-    //     // Need a new way to categorize if this feature is desired
-    //     // spendingMap.set(expense.category, (spendingMap.get(expense.category) || 0) + expense.amount);
-    //   });
-    //   return Array.from(spendingMap, ([category, amount]) => ({ category, amount }))
-    //               .sort((a, b) => b.amount - a.amount);
-    // }
-
     onMount(loadData);
 
+
     let searchQuery = "";
-    // Removed category and store filters as these fields are gone
-    // let selectedCategory = "All";
-    // let selectedStore = "All";
-
-    // $: availableCategories = ["All", ...new Set(expenses.filter(e => e.category).map(e => e.category))]; // Removed
-    // $: availableStores = ["All", ...new Set(expenses.filter(e => e.store).map(e => e.store))]; // Removed
-
     $: filteredExpenses = expenses.filter(item => {
       const matchesSearch = searchQuery === "" ||
         (item.description && item.description.toLowerCase().includes(searchQuery.toLowerCase())) || // Search in description
         (item.record_type && item.record_type.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (item.record_date && item.record_date.includes(searchQuery)); // Search in record_date
 
-      // Removed category and store matching
-      // const matchesCategory = selectedCategory === "All" || item.category === selectedCategory;
-      // const matchesStore = selectedStore === "All" || item.store === selectedStore;
-
-      return matchesSearch; // && matchesCategory && matchesStore;
+      return matchesSearch;
     });
 
     $: totalSpentFiltered = filteredExpenses.reduce((sum, expense) => sum + (expense.amount || 0), 0);
@@ -279,19 +255,8 @@
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-      <!-- Removed Category Spending Card as category field is gone -->
-      <!--
-      <div class="card bg-base-100 shadow-xl col-span-2">
-        <div class="card-body">
-          <h2 class="card-title">การใช้จ่ายตามหมวดหมู่</h2>
-          <div class="h-64 mt-4 overflow-y-auto">
-            <p class="text-center text-gray-500">ข้อมูลหมวดหมู่ถูกนำออก</p>
-          </div>
-        </div>
-      </div>
-      -->
 
-      <div class="card bg-base-100 shadow-xl lg:col-span-3"> <!-- Adjusted to span full width if category spending is removed -->
+      <div class="card bg-base-100 shadow-xl lg:col-span-3"> 
         <div class="card-body">
           <h2 class="card-title">ภาพรวมงบประมาณ</h2>
           {#if !isLoading && !error && financeStats.length > 0}
@@ -340,7 +305,6 @@
           </div>
         </div>
 
-        <!-- Removed category and store select dropdowns -->
       </div>
     </div>
 
@@ -373,7 +337,7 @@
               {:else}
                 {#each paginatedExpenses as expense (expense.id)}
                   <tr class="hover">
-                    <td>{expense.record_date}</td>
+                    <td>{formatDate(expense.record_date)}</td>
                     <td>{expense.record_type}</td>
                     <td>{expense.description}</td>
                     <td>{expense.quantity}</td>

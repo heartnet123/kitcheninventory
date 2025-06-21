@@ -1,11 +1,9 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import Database from '@tauri-apps/plugin-sql';
-    import Additemmodal from '../../components/additemmodal.svelte';
+    import AddItemModal from '../../components/additemmodal.svelte'; // Changed to PascalCase
     let showAddItemModal = false;
     const openModal = () => { showAddItemModal = true; };
-  
-    import { dataDir } from '@tauri-apps/api/path'
 
     interface Item {
       id: number;
@@ -13,6 +11,8 @@
       category: string;
       quantity: number;
       unit: string;
+      cost: number;
+      cost_per_unit: number;
     }
   
     let isLoadingItems = true;
@@ -22,11 +22,13 @@
     let quantity = 0;
     let unit = '';
     let error = '';
+    let cost = 0;
+    let costperunit = 0;
   
     async function getItems() {
       try {
         const db = await Database.load("sqlite:inventory.db");
-        const dbItems = await db.select<Item[]>("SELECT id, name, category, quantity, unit FROM items");
+        const dbItems = await db.select<Item[]>("SELECT id, name, category, quantity, unit, cost, cost_per_unit FROM items");
         error = '';
         items = dbItems;
         isLoadingItems = false;
@@ -52,21 +54,23 @@
     onMount(() => {
       getItems();
     });
-async function handleSaveNewItem(event: CustomEvent<{ name: string; quantity: number; unit: string; category: string }>) { // Add category to event detail type
-      const { name, quantity, unit, category } = event.detail; // Destructure category
-      const newItem = {
+async function handleSaveNewItem(event: CustomEvent<{ name: string; quantity: number; unit: string; category: string; cost: number; costperunit: number }>) { // Add category, cost, costperunit to event detail type
+      const { name, quantity, unit, category, cost, costperunit } = event.detail; // Destructure category, cost, costperunit
+      const newItem: Item = { // Ensure newItem conforms to Item interface
         id: Date.now(), // Consider using a more robust ID generation if needed
         name,
         category: category, // Use the received category
         quantity,
-        unit
+        unit,
+        cost,
+        costperunit // Use the received costperunit
       };
       try {
         const db = await Database.load("sqlite:inventory.db");
         // Use parameterized query to prevent SQL injection vulnerabilities
         await db.execute(
-          "INSERT INTO items (id, name, category, quantity, unit) VALUES ($1, $2, $3, $4, $5)",
-          [newItem.id, newItem.name, newItem.category, newItem.quantity, newItem.unit]
+          "INSERT INTO items (id, name, category, quantity, unit, cost, cost_per_unit) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+          [newItem.id, newItem.name, newItem.category, newItem.quantity, newItem.unit, newItem.cost, newItem.costperunit]
         );
         items = [...items, newItem]; // Update local state
       } catch (err) {
@@ -157,6 +161,8 @@ async function handleSaveNewItem(event: CustomEvent<{ name: string; quantity: nu
                   <th>Category</th>
                   <th>Quantity</th>
                   <th>Unit</th>
+                  <th>Cost</th>
+                  <th>Cost/Unit</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -176,6 +182,8 @@ async function handleSaveNewItem(event: CustomEvent<{ name: string; quantity: nu
                       <td>{item.category || 'N/A'}</td> <!-- Handle potential null/empty category -->
                       <td>{item.quantity}</td>
                       <td>{item.unit}</td>
+                      <td>{item.cost}</td>
+                      <td>{item.cost_per_unit}</td>
                       <td>
                         <div class="flex gap-2">
                           <button class="btn btn-xs btn-secondary">Edit</button> 
@@ -231,5 +239,5 @@ async function handleSaveNewItem(event: CustomEvent<{ name: string; quantity: nu
         {/if}
       </div>
     </div>
-<Additemmodal showModal={showAddItemModal as any} on:close={() => showAddItemModal = false} on:save={handleSaveNewItem} />
+<AddItemModal showModal={showAddItemModal as any} on:close={() => showAddItemModal = false} on:save={handleSaveNewItem} />
   </div>

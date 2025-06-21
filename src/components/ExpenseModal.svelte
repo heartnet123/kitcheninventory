@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
+  import { formatDate } from '../lib/utils';
 
   // Define the type for the expense prop
   type Expense = { id: number; date: string; category: string; amount: number; store: string; items: number };
@@ -8,6 +9,7 @@
   export let expense: Expense | null = null;
   
   const dispatch = createEventDispatcher();
+
 
   function closeModal() {
     dispatch('close'); // Dispatch a 'close' event when the modal should be closed
@@ -33,7 +35,7 @@
       >✕</button>
       <h3 class="font-bold text-lg" id="expense-modal-title">Expense Details (ID: {expense.id})</h3>
       <div class="py-4 space-y-2">
-        <p><strong>Date:</strong> {expense.date}</p>
+        <p><strong>Date:</strong> {formatDate(expense.date)}</p>
         <p><strong>Category:</strong> {expense.category}</p>
         <p><strong>Store:</strong> {expense.store}</p>
         <p><strong>Amount:</strong> ${expense.amount.toFixed(2)}</p>
